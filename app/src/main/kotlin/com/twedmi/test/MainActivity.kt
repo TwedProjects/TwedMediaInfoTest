@@ -20,6 +20,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -58,10 +59,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.twedmediainfo.android.AudioParameter
 import com.twedmediainfo.android.StreamKind
 import com.twedmediainfo.android.TwedMediaInfo
 import com.twedmi.test.ui.theme.ComposeEmptyActivityTheme
 import java.io.File
+
+private const val TAG = "TwedMediaInfoTest"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -199,10 +203,17 @@ fun VersionBanner() {
 
     if (versions == null && error == null) {
         try {
+            Log.d(TAG, "=== Testing getMediaInfoVersion() ===")
             val mi = TwedMediaInfo.getMediaInfoVersion()
+            Log.i(TAG, "MediaInfoLib version: $mi")
+            
+            Log.d(TAG, "=== Testing getZenLibVersion() ===")
             val zl = TwedMediaInfo.getZenLibVersion()
+            Log.i(TAG, "ZenLib version: $zl")
+            
             versions = mi to zl
         } catch (e: Throwable) {
+            Log.e(TAG, "Error getting versions", e)
             error = e.message ?: e.javaClass.simpleName
         }
     }
@@ -486,51 +497,146 @@ private fun analyzeFile(
     file: File,
     onError: (String) -> Unit
 ): Map<String, String>? {
+    Log.i(TAG, "=== Analyzing file: ${file.name} ===")
+    Log.d(TAG, "File path: ${file.absolutePath}")
+    
     val mediaInfo = TwedMediaInfo()
     val result = mutableMapOf<String, String>()
 
     return try {
+        Log.d(TAG, "=== Testing open() ===")
         if (!mediaInfo.open(file.absolutePath)) {
+            Log.e(TAG, "Failed to open file")
             onError("No se pudo abrir el archivo con MediaInfoLib")
             mediaInfo.destroy()
             return null
         }
+        Log.i(TAG, "✅ File opened successfully")
 
         // Información general
-        result["Formato"] = mediaInfo.getGeneral("Format")
-        result["Duración"] = formatDuration(mediaInfo.getGeneral("Duration"))
-        result["Tamaño (reportado)"] = formatFileSize(mediaInfo.getGeneral("FileSize").toLongOrNull() ?: 0L)
-        result["Bitrate total"] = formatBitrate(mediaInfo.getGeneral("OverallBitRate"))
+        Log.d(TAG, "=== Testing getGeneral() ===")
+        result["Formato"] = mediaInfo.getGeneral("Format").also { 
+            Log.i(TAG, "Format: $it")
+        }
+        result["Duración"] = formatDuration(mediaInfo.getGeneral("Duration")).also {
+            Log.i(TAG, "Duration: $it")
+        }
+        result["Tamaño (reportado)"] = formatFileSize(mediaInfo.getGeneral("FileSize").toLongOrNull() ?: 0L).also {
+            Log.i(TAG, "FileSize: $it")
+        }
+        result["Bitrate total"] = formatBitrate(mediaInfo.getGeneral("OverallBitRate")).also {
+            Log.i(TAG, "OverallBitRate: $it")
+        }
 
         // Streams de audio
+        Log.d(TAG, "=== Testing countStreams(StreamKind.Audio) ===")
         val audioCount = mediaInfo.countStreams(StreamKind.Audio)
         result["Streams de audio"] = audioCount.toString()
+        Log.i(TAG, "Audio streams: $audioCount")
 
         if (audioCount > 0) {
-            result["Codec de audio"] = mediaInfo.get(StreamKind.Audio, 0, "Format")
-            result["Sample rate"] = formatSampleRate(mediaInfo.get(StreamKind.Audio, 0, "SamplingRate"))
-            result["Canales"] = mediaInfo.get(StreamKind.Audio, 0, "Channel(s)")
-            result["Bitrate de audio"] = formatBitrate(mediaInfo.get(StreamKind.Audio, 0, "BitRate"))
-            result["Bit depth"] = mediaInfo.get(StreamKind.Audio, 0, "BitDepth")
+            Log.d(TAG, "=== Testing get() with AudioParameter constants ===")
+            
+            // Formato
+            result["Codec de audio"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.FORMAT).also {
+                Log.i(TAG, "Audio Format: $it")
+            }
+            result["Formato (string)"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.FORMAT_STRING).also {
+                Log.i(TAG, "Audio Format/String: $it")
+            }
+            
+            // Duración
+            result["Duración audio"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.DURATION_STRING).also {
+                Log.i(TAG, "Audio Duration/String: $it")
+            }
+            
+            // Bitrate
+            result["Bitrate de audio"] = formatBitrate(mediaInfo.get(StreamKind.Audio, 0, AudioParameter.BITRATE)).also {
+                Log.i(TAG, "Audio BitRate: $it")
+            }
+            result["Bitrate (string)"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.BITRATE_STRING).also {
+                Log.i(TAG, "Audio BitRate/String: $it")
+            }
+            
+            // Canales
+            result["Canales"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.CHANNELS).also {
+                Log.i(TAG, "Audio Channels: $it")
+            }
+            result["Canales (string)"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.CHANNELS_STRING).also {
+                Log.i(TAG, "Audio Channels/String: $it")
+            }
+            result["Layout de canales"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.CHANNEL_LAYOUT).also {
+                Log.i(TAG, "Audio ChannelLayout: $it")
+            }
+            
+            // Sampling
+            result["Sample rate"] = formatSampleRate(mediaInfo.get(StreamKind.Audio, 0, AudioParameter.SAMPLING_RATE)).also {
+                Log.i(TAG, "Audio SamplingRate: $it")
+            }
+            
+            // Profundidad
+            result["Bit depth"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.BIT_DEPTH).also {
+                Log.i(TAG, "Audio BitDepth: $it")
+            }
+            
+            // Metadata
+            result["Título"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.TITLE).also {
+                Log.i(TAG, "Audio Title: $it")
+            }
+            result["Idioma"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.LANGUAGE).also {
+                Log.i(TAG, "Audio Language: $it")
+            }
+            result["Encoder"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.ENCODED_LIBRARY).also {
+                Log.i(TAG, "Audio Encoded_Library: $it")
+            }
+            
+            // Prueba de edge case: parámetro inexistente
+            Log.d(TAG, "=== Testing get() with non-existent parameter ===")
+            val nonExistent = mediaInfo.get(StreamKind.Audio, 0, "NonExistentParameter12345")
+            Log.i(TAG, "Non-existent parameter result: '$nonExistent' (expected empty string)")
+            if (nonExistent.isNotEmpty()) {
+                Log.w(TAG, "⚠️ Non-existent parameter returned non-empty value!")
+            }
         }
 
         // Streams de video (si existen)
+        Log.d(TAG, "=== Testing countStreams(StreamKind.Video) ===")
         val videoCount = mediaInfo.countStreams(StreamKind.Video)
         result["Streams de video"] = videoCount.toString()
+        Log.i(TAG, "Video streams: $videoCount")
 
         if (videoCount > 0) {
-            result["Codec de video"] = mediaInfo.get(StreamKind.Video, 0, "Format")
-            val width = mediaInfo.get(StreamKind.Video, 0, "Width")
-            val height = mediaInfo.get(StreamKind.Video, 0, "Height")
+            Log.d(TAG, "=== Testing get() with Video parameters ===")
+            result["Codec de video"] = mediaInfo.get(StreamKind.Video, 0, "Format").also {
+                Log.i(TAG, "Video Format: $it")
+            }
+            val width = mediaInfo.get(StreamKind.Video, 0, "Width").also {
+                Log.i(TAG, "Video Width: $it")
+            }
+            val height = mediaInfo.get(StreamKind.Video, 0, "Height").also {
+                Log.i(TAG, "Video Height: $it")
+            }
             result["Resolución"] = if (width.isNotEmpty() && height.isNotEmpty()) "${width}x$height" else ""
-            result["FPS"] = mediaInfo.get(StreamKind.Video, 0, "FrameRate")
-            result["Bitrate de video"] = formatBitrate(mediaInfo.get(StreamKind.Video, 0, "BitRate"))
+            result["FPS"] = mediaInfo.get(StreamKind.Video, 0, "FrameRate").also {
+                Log.i(TAG, "Video FrameRate: $it")
+            }
+            result["Bitrate de video"] = formatBitrate(mediaInfo.get(StreamKind.Video, 0, "BitRate")).also {
+                Log.i(TAG, "Video BitRate: $it")
+            }
         }
 
+        Log.d(TAG, "=== Testing close() ===")
         mediaInfo.close()
+        Log.i(TAG, "✅ File closed successfully")
+        
+        Log.d(TAG, "=== Testing destroy() ===")
         mediaInfo.destroy()
+        Log.i(TAG, "✅ Instance destroyed successfully")
+        
+        Log.i(TAG, "=== ✅ All tests passed for ${file.name} ===")
         result
     } catch (e: Throwable) {
+        Log.e(TAG, "❌ Exception during analysis", e)
         onError("Excepción al analizar: ${e.javaClass.simpleName}: ${e.message}")
         try {
             mediaInfo.destroy()
