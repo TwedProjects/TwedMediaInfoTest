@@ -1,0 +1,161 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NDK_VERSION: "28.2.13676358"
+  CMAKE_VERSION: "3.22.1"
+  COMPILE_SDK: "37"
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=10g -Dfile.encoding=UTF-8"
+
+jobs:
+  build:
+    name: Compilar TwedMediaInfo (AAR) y app de prueba
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout de la librería (TwedMediaInfo)
+        uses: actions/checkout@v6
+        with:
+          repository: TwedProjects/TwedMediaInfo
+          path: lib-src
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Checkout de la app (TwedMediaInfoTest)
+        uses: actions/checkout@v6
+        with:
+          repository: TwedProjects/TwedMediaInfoTest
+          path: app-src
+          fetch-depth: 1
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+
+      - name: Instalar plataforma Android, NDK y CMake
+        run: |
+          set -euo pipefail
+          SDKMANAGER_BIN="$(command -v sdkmanager || true)"
+          if [ -z "${SDKMANAGER_BIN}" ]; then
+            for candidate in \
+              "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" \
+              "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"; do
+              if [ -x "${candidate}" ]; then
+                SDKMANAGER_BIN="${candidate}"
+                break
+              fi
+            done
+          fi
+          if [ -z "${SDKMANAGER_BIN}" ]; then
+            echo "No se encontró sdkmanager."
+            exit 1
+          fi
+          yes | "${SDKMANAGER_BIN}" --licenses > /dev/null 2>&1 || true
+          "${SDKMANAGER_BIN}" --install \
+            "platform-tools" \
+            "platforms;android-${COMPILE_SDK}.0" \
+            "ndk;${NDK_VERSION}" \
+            "cmake;${CMAKE_VERSION}"
+
+      - name: Preparar local.properties y ANDROID_NDK_HOME
+        run: |
+          set -euo pipefail
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "${SDK_DIR}" ]; then
+            echo "No se encontró ANDROID_HOME ni ANDROID_SDK_ROOT."
+            exit 1
+          fi
+          echo "sdk.dir=${SDK_DIR}" > lib-src/local.properties
+          echo "sdk.dir=${SDK_DIR}" > app-src/local.properties
+          echo "ANDROID_NDK_HOME=${SDK_DIR}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Verificar third_party de la librería
+        run: |
+          set -euo pipefail
+          cd lib-src
+          for required_dir in \
+            third_party/MediaInfoLib-26.05/Source \
+            third_party/ZenLib-0.4.41/Source \
+            third_party/zlib-1.3.2; do
+            if [ ! -d "${required_dir}" ]; then
+              echo "Falta ${required_dir}."
+              exit 1
+            fi
+          done
+
+      - name: Compilar y publicar el AAR (release) en Maven Local
+        working-directory: lib-src
+        run: |
+          chmod +x ./gradlew || true
+          ./gradlew :lib:publishToMavenLocal --stacktrace --no-daemon
+
+      - name: Verificar publicación en Maven Local
+        run: |
+          set -euo pipefail
+          DIR="${HOME}/.m2/repository/com/twedmediainfo/twedmediainfo/0.1.0-SNAPSHOT"
+          if [ ! -d "${DIR}" ]; then
+            echo "ERROR: no existe ${DIR}"
+            exit 1
+          fi
+          ls -lah "${DIR}"
+
+      - name: Eliminar el repo de la librería
+        run: |
+          rm -rf lib-src
+          ls -lah "${HOME}/.m2/repository/com/twedmediainfo/twedmediainfo/0.1.0-SNAPSHOT"
+
+      - name: Preparar firma de la app
+        working-directory: app-src
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          KEYSTORE_KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
+          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64}" ]; then
+            echo "Falta el secret KEYSTORE_BASE64."
+            exit 1
+          fi
+          mkdir -p app/keystore
+          echo "${KEYSTORE_BASE64}" | base64 -d > app/keystore/release-key.jks
+          {
+            echo "storeFile=keystore/release-key.jks"
+            echo "storePassword=${KEYSTORE_STORE_PASSWORD}"
+            echo "keyAlias=${KEYSTORE_KEY_ALIAS}"
+            echo "keyPassword=${KEYSTORE_KEY_PASSWORD}"
+          } > app/keystore.properties
+
+      - name: Compilar app (Release)
+        working-directory: app-src
+        run: |
+          chmod +x ./gradlew || true
+          ./gradlew :app:assembleRelease --stacktrace --no-daemon
+
+      - name: Subir APK release
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twedmediainfotest-release-apk
+          path: app-src/app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn

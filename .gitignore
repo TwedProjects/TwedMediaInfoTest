@@ -1,0 +1,4 @@
+# Android signing / release secrets
+keystore.properties
+release-key.jks*
+release-key-base64.txt*
