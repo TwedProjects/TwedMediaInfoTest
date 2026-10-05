@@ -1,19 +1,3 @@
-/*
- * Copyright 2026 TwedMediaInfo Contributors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.twedmi.test
 
 import android.Manifest
@@ -529,8 +513,8 @@ private fun analyzeFile(
         }
 
         // Streams de audio
-        Log.d(TAG, "=== Testing countStreams(StreamKind.Audio) ===")
-        val audioCount = mediaInfo.countStreams(StreamKind.Audio)
+        Log.d(TAG, "=== Testing countStreams(StreamKind.AUDIO) ===")
+        val audioCount = mediaInfo.countStreams(StreamKind.AUDIO)
         result["Streams de audio"] = audioCount.toString()
         Log.i(TAG, "Audio streams: $audioCount")
 
@@ -538,61 +522,61 @@ private fun analyzeFile(
             Log.d(TAG, "=== Testing get() with Audio constants ===")
             
             // Formato
-            result["Codec de audio"] = mediaInfo.get(StreamKind.Audio, 0, Audio.FORMAT).also {
+            result["Codec de audio"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.FORMAT).also {
                 Log.i(TAG, "Audio Format: $it")
             }
-            result["Formato (string)"] = mediaInfo.get(StreamKind.Audio, 0, Audio.FORMAT_STRING).also {
+            result["Formato (string)"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.FORMAT_STRING).also {
                 Log.i(TAG, "Audio Format/String: $it")
             }
             
             // Duración
-            result["Duración audio"] = mediaInfo.get(StreamKind.Audio, 0, Audio.DURATION_STRING).also {
+            result["Duración audio"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.DURATION_STRING).also {
                 Log.i(TAG, "Audio Duration/String: $it")
             }
             
             // Bitrate
-            result["Bitrate de audio"] = formatBitrate(mediaInfo.get(StreamKind.Audio, 0, Audio.BITRATE)).also {
+            result["Bitrate de audio"] = formatBitrate(mediaInfo.get(StreamKind.AUDIO, 0, Audio.BITRATE)).also {
                 Log.i(TAG, "Audio BitRate: $it")
             }
-            result["Bitrate (string)"] = mediaInfo.get(StreamKind.Audio, 0, Audio.BITRATE_STRING).also {
+            result["Bitrate (string)"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.BITRATE_STRING).also {
                 Log.i(TAG, "Audio BitRate/String: $it")
             }
             
             // Canales
-            result["Canales"] = mediaInfo.get(StreamKind.Audio, 0, Audio.CHANNELS).also {
+            result["Canales"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNELS).also {
                 Log.i(TAG, "Audio Channels: $it")
             }
-            result["Canales (string)"] = mediaInfo.get(StreamKind.Audio, 0, Audio.CHANNELS_STRING).also {
+            result["Canales (string)"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNELS_STRING).also {
                 Log.i(TAG, "Audio Channels/String: $it")
             }
-            result["Layout de canales"] = mediaInfo.get(StreamKind.Audio, 0, Audio.CHANNEL_LAYOUT).also {
+            result["Layout de canales"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNEL_LAYOUT).also {
                 Log.i(TAG, "Audio ChannelLayout: $it")
             }
             
             // Sampling
-            result["Sample rate"] = formatSampleRate(mediaInfo.get(StreamKind.Audio, 0, Audio.SAMPLING_RATE)).also {
+            result["Sample rate"] = formatSampleRate(mediaInfo.get(StreamKind.AUDIO, 0, Audio.SAMPLING_RATE)).also {
                 Log.i(TAG, "Audio SamplingRate: $it")
             }
             
             // Profundidad
-            result["Bit depth"] = mediaInfo.get(StreamKind.Audio, 0, Audio.BIT_DEPTH).also {
+            result["Bit depth"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.BIT_DEPTH).also {
                 Log.i(TAG, "Audio BitDepth: $it")
             }
             
             // Metadata
-            result["Título"] = mediaInfo.get(StreamKind.Audio, 0, Audio.TITLE).also {
+            result["Título"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.TITLE).also {
                 Log.i(TAG, "Audio Title: $it")
             }
-            result["Idioma"] = mediaInfo.get(StreamKind.Audio, 0, Audio.LANGUAGE).also {
+            result["Idioma"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.LANGUAGE).also {
                 Log.i(TAG, "Audio Language: $it")
             }
-            result["Encoder"] = mediaInfo.get(StreamKind.Audio, 0, Audio.ENCODED_LIBRARY).also {
+            result["Encoder"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.ENCODED_LIBRARY).also {
                 Log.i(TAG, "Audio Encoded_Library: $it")
             }
             
             // Prueba de edge case: parámetro inexistente
             Log.d(TAG, "=== Testing get() with non-existent parameter ===")
-            val nonExistent = mediaInfo.get(StreamKind.Audio, 0, "NonExistentParameter12345")
+            val nonExistent = mediaInfo.get(StreamKind.AUDIO, 0, "NonExistentParameter12345")
             Log.i(TAG, "Non-existent parameter result: '$nonExistent' (expected empty string)")
             if (nonExistent.isNotEmpty()) {
                 Log.w(TAG, "⚠️ Non-existent parameter returned non-empty value!")
@@ -600,27 +584,27 @@ private fun analyzeFile(
         }
 
         // Streams de video (si existen)
-        Log.d(TAG, "=== Testing countStreams(StreamKind.Video) ===")
-        val videoCount = mediaInfo.countStreams(StreamKind.Video)
+        Log.d(TAG, "=== Testing countStreams(StreamKind.VIDEO) ===")
+        val videoCount = mediaInfo.countStreams(StreamKind.VIDEO)
         result["Streams de video"] = videoCount.toString()
         Log.i(TAG, "Video streams: $videoCount")
 
         if (videoCount > 0) {
             Log.d(TAG, "=== Testing get() with Video parameters ===")
-            result["Codec de video"] = mediaInfo.get(StreamKind.Video, 0, "Format").also {
+            result["Codec de video"] = mediaInfo.get(StreamKind.VIDEO, 0, "Format").also {
                 Log.i(TAG, "Video Format: $it")
             }
-            val width = mediaInfo.get(StreamKind.Video, 0, "Width").also {
+            val width = mediaInfo.get(StreamKind.VIDEO, 0, "Width").also {
                 Log.i(TAG, "Video Width: $it")
             }
-            val height = mediaInfo.get(StreamKind.Video, 0, "Height").also {
+            val height = mediaInfo.get(StreamKind.VIDEO, 0, "Height").also {
                 Log.i(TAG, "Video Height: $it")
             }
             result["Resolución"] = if (width.isNotEmpty() && height.isNotEmpty()) "${width}x$height" else ""
-            result["FPS"] = mediaInfo.get(StreamKind.Video, 0, "FrameRate").also {
+            result["FPS"] = mediaInfo.get(StreamKind.VIDEO, 0, "FrameRate").also {
                 Log.i(TAG, "Video FrameRate: $it")
             }
-            result["Bitrate de video"] = formatBitrate(mediaInfo.get(StreamKind.Video, 0, "BitRate")).also {
+            result["Bitrate de video"] = formatBitrate(mediaInfo.get(StreamKind.VIDEO, 0, "BitRate")).also {
                 Log.i(TAG, "Video BitRate: $it")
             }
         }
