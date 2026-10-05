@@ -1,15 +1,15 @@
 package com.twedmi.test
 
-import android.Manifest
-import android.content.pm.PackageManager
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,6 +30,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -42,10 +44,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.twedmediainfo.android.StreamKind
 import com.twedmediainfo.android.TwedMediaInfo
 import com.twedmediainfo.android.parameters.Audio
+import com.twedmediainfo.android.parameters.Video
 import com.twedmi.test.ui.theme.ComposeEmptyActivityTheme
 import java.io.File
 
@@ -68,32 +70,9 @@ class MainActivity : ComponentActivity() {
 fun MediaInfoApp() {
     val context = LocalContext.current
 
-    var directoryPath by remember {
-        mutableStateOf("/storage/emulated/0/Music/Music/")
+    var hasPermission by remember {
+        mutableStateOf(checkStoragePermission(context))
     }
-    var files by remember { mutableStateOf<List<File>>(emptyList()) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var selectedFile by remember { mutableStateOf<File?>(null) }
-    var fileInfo by remember { mutableStateOf<Map<String, String>?>(null) }
-    var fileError by remember { mutableStateOf<String?>(null) }
-
-    val hasPermission = remember {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.READ_MEDIA_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED
-        } else {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    val requestPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* recomposición automática al cambiar hasPermission */ }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -107,81 +86,41 @@ fun MediaInfoApp() {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
         ) {
             // Versión de la biblioteca (valida que carga nativa funciona)
-            VersionBanner()
+            VersionBanner(
+                modifier = Modifier.padding(16.dp)
+            )
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            when {
-                !hasPermission -> {
-                    PermissionRequest {
-                        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            Manifest.permission.READ_MEDIA_AUDIO
-                        } else {
-                            Manifest.permission.READ_EXTERNAL_STORAGE
-                        }
-                        requestPermissionLauncher.launch(permission)
+            if (!hasPermission) {
+                PermissionRequest(
+                    onPermissionGranted = {
+                        hasPermission = true
                     }
-                }
-
-                selectedFile != null -> {
-                    if (fileError != null) {
-                        ErrorView(
-                            message = fileError!!,
-                            onBack = {
-                                selectedFile = null
-                                fileInfo = null
-                                fileError = null
-                            }
-                        )
-                    } else if (fileInfo != null) {
-                        FileInfoView(
-                            file = selectedFile!!,
-                            info = fileInfo!!,
-                            onBack = {
-                                selectedFile = null
-                                fileInfo = null
-                                fileError = null
-                            }
-                        )
-                    }
-                }
-
-                else -> {
-                    DirectorySelector(
-                        directoryPath = directoryPath,
-                        onDirectoryPathChange = { directoryPath = it },
-                        onLoadFiles = {
-                            errorMessage = null
-                            files = loadFilesFromDirectory(directoryPath) { error ->
-                                errorMessage = error
-                            }
-                        },
-                        errorMessage = errorMessage
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    if (files.isNotEmpty()) {
-                        FileList(
-                            files = files,
-                            onFileClick = { file ->
-                                selectedFile = file
-                                fileError = null
-                                fileInfo = analyzeFile(file) { err -> fileError = err }
-                            }
-                        )
-                    }
-                }
+                )
+            } else {
+                // Pantalla principal con tabs
+                MainScreen()
             }
         }
     }
 }
 
+private fun checkStoragePermission(context: android.content.Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        // Android 11+ : MANAGE_EXTERNAL_STORAGE
+        Environment.isExternalStorageManager()
+    } else {
+        // Android 10 y anteriores: READ_EXTERNAL_STORAGE
+        android.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.READ_EXTERNAL_STORAGE
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+}
+
 @Composable
-fun VersionBanner() {
+fun VersionBanner(modifier: Modifier = Modifier) {
     var versions by remember { mutableStateOf<Pair<String, String>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -202,9 +141,7 @@ fun VersionBanner() {
         }
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
                 text = "Estado del wrapper",
@@ -239,19 +176,188 @@ fun VersionBanner() {
 }
 
 @Composable
-fun PermissionRequest(onRequestPermission: () -> Unit) {
+fun PermissionRequest(onPermissionGranted: () -> Unit) {
+    val context = LocalContext.current
+    
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Se requiere permiso para leer archivos multimedia",
+            text = "Se requiere permiso para acceder a todos los archivos",
             style = MaterialTheme.typography.bodyLarge
         )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                "Android 11+ requiere acceso completo al almacenamiento"
+            } else {
+                "Se necesita permiso de lectura de almacenamiento"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onRequestPermission) {
+        
+        Button(onClick = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // Android 11+: Abrir configuración de acceso a todos los archivos
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                }
+                context.startActivity(intent)
+            } else {
+                // Android 10 y anteriores: Solicitar READ_EXTERNAL_STORAGE
+                val permission = android.Manifest.permission.READ_EXTERNAL_STORAGE
+                val requestPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+                ) { granted ->
+                    if (granted) {
+                        onPermissionGranted()
+                    }
+                }
+                requestPermissionLauncher.launch(permission)
+            }
+        }) {
             Text("Conceder permiso")
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Button(onClick = {
+            // Verificar si el permiso fue concedido después de regresar de configuración
+            if (checkStoragePermission(context)) {
+                onPermissionGranted()
+            }
+        }) {
+            Text("Verificar permiso")
+        }
+    }
+}
+
+@Composable
+fun MainScreen() {
+    var selectedTab by remember { mutableStateOf(0) }
+    val tabs = listOf("Audio", "Video")
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = selectedTab) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    text = { Text(title) },
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index }
+                )
+            }
+        }
+
+        when (selectedTab) {
+            0 -> AudioScreen()
+            1 -> VideoScreen()
+        }
+    }
+}
+
+@Composable
+fun AudioScreen() {
+    MediaScreen(
+        title = "Archivos de Audio",
+        extensions = AUDIO_EXTENSIONS,
+        analyzeFile = ::analyzeAudioFile
+    )
+}
+
+@Composable
+fun VideoScreen() {
+    MediaScreen(
+        title = "Archivos de Video",
+        extensions = VIDEO_EXTENSIONS,
+        analyzeFile = ::analyzeVideoFile
+    )
+}
+
+@Composable
+fun MediaScreen(
+    title: String,
+    extensions: Set<String>,
+    analyzeFile: (File) -> Map<String, String>?
+) {
+    var directoryPath by remember {
+        mutableStateOf("/storage/emulated/0/")
+    }
+    var files by remember { mutableStateOf<List<File>>(emptyList()) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var selectedFile by remember { mutableStateOf<File?>(null) }
+    var fileInfo by remember { mutableStateOf<Map<String, String>?>(null) }
+    var fileError by remember { mutableStateOf<String?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        when {
+            selectedFile != null -> {
+                if (fileError != null) {
+                    ErrorView(
+                        message = fileError!!,
+                        onBack = {
+                            selectedFile = null
+                            fileInfo = null
+                            fileError = null
+                        }
+                    )
+                } else if (fileInfo != null) {
+                    FileInfoView(
+                        file = selectedFile!!,
+                        info = fileInfo!!,
+                        onBack = {
+                            selectedFile = null
+                            fileInfo = null
+                            fileError = null
+                        }
+                    )
+                }
+            }
+
+            else -> {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                DirectorySelector(
+                    directoryPath = directoryPath,
+                    onDirectoryPathChange = { directoryPath = it },
+                    onLoadFiles = {
+                        errorMessage = null
+                        files = loadFilesFromDirectory(directoryPath, extensions) { error ->
+                            errorMessage = error
+                        }
+                    },
+                    errorMessage = errorMessage
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (files.isNotEmpty()) {
+                    FileList(
+                        files = files,
+                        onFileClick = { file ->
+                            selectedFile = file
+                            fileError = null
+                            fileInfo = analyzeFile(file) ?: run {
+                                fileError = "No se pudo analizar el archivo"
+                                null
+                            }
+                        }
+                    )
+                }
+            }
         }
     }
 }
@@ -439,13 +545,21 @@ fun ErrorView(message: String, onBack: () -> Unit) {
     }
 }
 
-private val MEDIA_EXTENSIONS = setOf(
+private val AUDIO_EXTENSIONS = setOf(
     "mp3", "ogg", "opus", "flac", "m4a", "aac", "wav", "wma", "alac",
-    "mp4", "mkv", "avi", "mov", "webm", "flv", "wmv"
+    "mka", "mid", "midi", "amr", "awb", "ac3", "eac3", "dts",
+    "ape", "wv", "aiff", "aif", "caf", "dsf", "dff"
+)
+
+private val VIDEO_EXTENSIONS = setOf(
+    "mp4", "mkv", "webm", "mov", "avi", "3gp", "3g2", "ts", "m2ts", "mts",
+    "flv", "wmv", "mpg", "mpeg", "m4v", "vob", "ogv", "divx", "xvid",
+    "rm", "rmvb", "asf", "m2v", "m4p"
 )
 
 private fun loadFilesFromDirectory(
     path: String,
+    extensions: Set<String>,
     onError: (String) -> Unit
 ): List<File> {
     return try {
@@ -460,7 +574,7 @@ private fun loadFilesFromDirectory(
         }
 
         val files = dir.listFiles { file ->
-            file.isFile && file.extension.lowercase() in MEDIA_EXTENSIONS
+            file.isFile && file.extension.lowercase() in extensions
         }?.sortedBy { it.name.lowercase() } ?: emptyList()
 
         if (files.isEmpty()) {
@@ -477,156 +591,130 @@ private fun loadFilesFromDirectory(
     }
 }
 
-private fun analyzeFile(
-    file: File,
-    onError: (String) -> Unit
-): Map<String, String>? {
-    Log.i(TAG, "=== Analyzing file: ${file.name} ===")
+private fun analyzeAudioFile(file: File): Map<String, String>? {
+    Log.i(TAG, "=== Analyzing audio file: ${file.name} ===")
     Log.d(TAG, "File path: ${file.absolutePath}")
     
     val mediaInfo = TwedMediaInfo()
     val result = mutableMapOf<String, String>()
 
     return try {
-        Log.d(TAG, "=== Testing open() ===")
         if (!mediaInfo.open(file.absolutePath)) {
             Log.e(TAG, "Failed to open file")
-            onError("No se pudo abrir el archivo con MediaInfoLib")
             mediaInfo.destroy()
             return null
         }
         Log.i(TAG, "✅ File opened successfully")
 
         // Información general
-        Log.d(TAG, "=== Testing getGeneral() ===")
-        result["Formato"] = mediaInfo.getGeneral("Format").also { 
-            Log.i(TAG, "Format: $it")
-        }
-        result["Duración"] = formatDuration(mediaInfo.getGeneral("Duration")).also {
-            Log.i(TAG, "Duration: $it")
-        }
-        result["Tamaño (reportado)"] = formatFileSize(mediaInfo.getGeneral("FileSize").toLongOrNull() ?: 0L).also {
-            Log.i(TAG, "FileSize: $it")
-        }
-        result["Bitrate total"] = formatBitrate(mediaInfo.getGeneral("OverallBitRate")).also {
-            Log.i(TAG, "OverallBitRate: $it")
-        }
+        result["Formato"] = mediaInfo.getGeneral("Format")
+        result["Duración"] = formatDuration(mediaInfo.getGeneral("Duration"))
+        result["Tamaño"] = formatFileSize(mediaInfo.getGeneral("FileSize").toLongOrNull() ?: 0L)
+        result["Bitrate total"] = formatBitrate(mediaInfo.getGeneral("OverallBitRate"))
 
         // Streams de audio
-        Log.d(TAG, "=== Testing countStreams(StreamKind.AUDIO) ===")
         val audioCount = mediaInfo.countStreams(StreamKind.AUDIO)
         result["Streams de audio"] = audioCount.toString()
-        Log.i(TAG, "Audio streams: $audioCount")
 
         if (audioCount > 0) {
-            Log.d(TAG, "=== Testing get() with Audio constants ===")
-            
-            // Formato
-            result["Codec de audio"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.FORMAT).also {
-                Log.i(TAG, "Audio Format: $it")
-            }
-            result["Formato (string)"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.FORMAT_STRING).also {
-                Log.i(TAG, "Audio Format/String: $it")
-            }
-            
-            // Duración
-            result["Duración audio"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.DURATION_STRING).also {
-                Log.i(TAG, "Audio Duration/String: $it")
-            }
-            
-            // Bitrate
-            result["Bitrate de audio"] = formatBitrate(mediaInfo.get(StreamKind.AUDIO, 0, Audio.BITRATE)).also {
-                Log.i(TAG, "Audio BitRate: $it")
-            }
-            result["Bitrate (string)"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.BITRATE_STRING).also {
-                Log.i(TAG, "Audio BitRate/String: $it")
-            }
-            
-            // Canales
-            result["Canales"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNELS).also {
-                Log.i(TAG, "Audio Channels: $it")
-            }
-            result["Canales (string)"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNELS_STRING).also {
-                Log.i(TAG, "Audio Channels/String: $it")
-            }
-            result["Layout de canales"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNEL_LAYOUT).also {
-                Log.i(TAG, "Audio ChannelLayout: $it")
-            }
-            
-            // Sampling
-            result["Sample rate"] = formatSampleRate(mediaInfo.get(StreamKind.AUDIO, 0, Audio.SAMPLING_RATE)).also {
-                Log.i(TAG, "Audio SamplingRate: $it")
-            }
-            
-            // Profundidad
-            result["Bit depth"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.BIT_DEPTH).also {
-                Log.i(TAG, "Audio BitDepth: $it")
-            }
-            
-            // Metadata
-            result["Título"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.TITLE).also {
-                Log.i(TAG, "Audio Title: $it")
-            }
-            result["Idioma"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.LANGUAGE).also {
-                Log.i(TAG, "Audio Language: $it")
-            }
-            result["Encoder"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.ENCODED_LIBRARY).also {
-                Log.i(TAG, "Audio Encoded_Library: $it")
-            }
-            
-            // Prueba de edge case: parámetro inexistente
-            Log.d(TAG, "=== Testing get() with non-existent parameter ===")
-            val nonExistent = mediaInfo.get(StreamKind.AUDIO, 0, "NonExistentParameter12345")
-            Log.i(TAG, "Non-existent parameter result: '$nonExistent' (expected empty string)")
-            if (nonExistent.isNotEmpty()) {
-                Log.w(TAG, "⚠️ Non-existent parameter returned non-empty value!")
-            }
+            result["Codec"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.FORMAT)
+            result["Codec (string)"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.FORMAT_STRING)
+            result["Duración"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.DURATION_STRING)
+            result["Bitrate"] = formatBitrate(mediaInfo.get(StreamKind.AUDIO, 0, Audio.BITRATE))
+            result["Bitrate (string)"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.BITRATE_STRING)
+            result["Canales"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNELS)
+            result["Canales (string)"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNELS_STRING)
+            result["Layout"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNEL_LAYOUT)
+            result["Sample rate"] = formatSampleRate(mediaInfo.get(StreamKind.AUDIO, 0, Audio.SAMPLING_RATE))
+            result["Bit depth"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.BIT_DEPTH)
+            result["Título"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.TITLE)
+            result["Artista"] = mediaInfo.get(StreamKind.AUDIO, 0, "Performer")
+            result["Álbum"] = mediaInfo.get(StreamKind.AUDIO, 0, "Album")
+            result["Idioma"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.LANGUAGE)
+            result["Encoder"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.ENCODED_LIBRARY)
         }
 
-        // Streams de video (si existen)
-        Log.d(TAG, "=== Testing countStreams(StreamKind.VIDEO) ===")
-        val videoCount = mediaInfo.countStreams(StreamKind.VIDEO)
-        result["Streams de video"] = videoCount.toString()
-        Log.i(TAG, "Video streams: $videoCount")
-
-        if (videoCount > 0) {
-            Log.d(TAG, "=== Testing get() with Video parameters ===")
-            result["Codec de video"] = mediaInfo.get(StreamKind.VIDEO, 0, "Format").also {
-                Log.i(TAG, "Video Format: $it")
-            }
-            val width = mediaInfo.get(StreamKind.VIDEO, 0, "Width").also {
-                Log.i(TAG, "Video Width: $it")
-            }
-            val height = mediaInfo.get(StreamKind.VIDEO, 0, "Height").also {
-                Log.i(TAG, "Video Height: $it")
-            }
-            result["Resolución"] = if (width.isNotEmpty() && height.isNotEmpty()) "${width}x$height" else ""
-            result["FPS"] = mediaInfo.get(StreamKind.VIDEO, 0, "FrameRate").also {
-                Log.i(TAG, "Video FrameRate: $it")
-            }
-            result["Bitrate de video"] = formatBitrate(mediaInfo.get(StreamKind.VIDEO, 0, "BitRate")).also {
-                Log.i(TAG, "Video BitRate: $it")
-            }
-        }
-
-        Log.d(TAG, "=== Testing close() ===")
         mediaInfo.close()
-        Log.i(TAG, "✅ File closed successfully")
-        
-        Log.d(TAG, "=== Testing destroy() ===")
         mediaInfo.destroy()
-        Log.i(TAG, "✅ Instance destroyed successfully")
         
-        Log.i(TAG, "=== ✅ All tests passed for ${file.name} ===")
+        Log.i(TAG, "=== ✅ Audio analysis complete for ${file.name} ===")
         result
     } catch (e: Throwable) {
-        Log.e(TAG, "❌ Exception during analysis", e)
-        onError("Excepción al analizar: ${e.javaClass.simpleName}: ${e.message}")
+        Log.e(TAG, "❌ Exception during audio analysis", e)
         try {
             mediaInfo.destroy()
-        } catch (_: Throwable) {
-            // Ignorar errores de limpieza
+        } catch (_: Throwable) {}
+        null
+    }
+}
+
+private fun analyzeVideoFile(file: File): Map<String, String>? {
+    Log.i(TAG, "=== Analyzing video file: ${file.name} ===")
+    Log.d(TAG, "File path: ${file.absolutePath}")
+    
+    val mediaInfo = TwedMediaInfo()
+    val result = mutableMapOf<String, String>()
+
+    return try {
+        if (!mediaInfo.open(file.absolutePath)) {
+            Log.e(TAG, "Failed to open file")
+            mediaInfo.destroy()
+            return null
         }
+        Log.i(TAG, "✅ File opened successfully")
+
+        // Información general
+        result["Formato"] = mediaInfo.getGeneral("Format")
+        result["Duración"] = formatDuration(mediaInfo.getGeneral("Duration"))
+        result["Tamaño"] = formatFileSize(mediaInfo.getGeneral("FileSize").toLongOrNull() ?: 0L)
+        result["Bitrate total"] = formatBitrate(mediaInfo.getGeneral("OverallBitRate"))
+
+        // Streams de video
+        val videoCount = mediaInfo.countStreams(StreamKind.VIDEO)
+        result["Streams de video"] = videoCount.toString()
+
+        if (videoCount > 0) {
+            result["Codec"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.FORMAT)
+            result["Codec (string)"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.FORMAT_STRING)
+            result["Perfil"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.FORMAT_PROFILE)
+            result["Nivel"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.FORMAT_LEVEL)
+            
+            val width = mediaInfo.get(StreamKind.VIDEO, 0, Video.WIDTH)
+            val height = mediaInfo.get(StreamKind.VIDEO, 0, Video.HEIGHT)
+            result["Resolución"] = if (width.isNotEmpty() && height.isNotEmpty()) "${width}x${height}" else ""
+            
+            result["Aspect ratio"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.DISPLAY_ASPECT_RATIO_STRING)
+            result["FPS"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.FRAME_RATE_STRING)
+            result["Bitrate"] = formatBitrate(mediaInfo.get(StreamKind.VIDEO, 0, Video.BITRATE))
+            result["Bitrate (string)"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.BITRATE_STRING)
+            result["Duración"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.DURATION_STRING)
+            result["Color space"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.COLOR_SPACE)
+            result["Chroma subsampling"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.CHROMA_SUBSAMPLING)
+            result["Bit depth"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.BIT_DEPTH)
+            result["Scan type"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.SCAN_TYPE)
+            result["HDR format"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.HDR_FORMAT)
+        }
+
+        // Streams de audio (si existen)
+        val audioCount = mediaInfo.countStreams(StreamKind.AUDIO)
+        result["Streams de audio"] = audioCount.toString()
+
+        if (audioCount > 0) {
+            result["Audio codec"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.FORMAT)
+            result["Audio canales"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNELS_STRING)
+            result["Audio bitrate"] = formatBitrate(mediaInfo.get(StreamKind.AUDIO, 0, Audio.BITRATE))
+        }
+
+        mediaInfo.close()
+        mediaInfo.destroy()
+        
+        Log.i(TAG, "=== ✅ Video analysis complete for ${file.name} ===")
+        result
+    } catch (e: Throwable) {
+        Log.e(TAG, "❌ Exception during video analysis", e)
+        try {
+            mediaInfo.destroy()
+        } catch (_: Throwable) {}
         null
     }
 }
