@@ -59,9 +59,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.twedmediainfo.android.AudioParameter
 import com.twedmediainfo.android.StreamKind
 import com.twedmediainfo.android.TwedMediaInfo
+import com.twedmediainfo.android.parameters.Audio
 import com.twedmi.test.ui.theme.ComposeEmptyActivityTheme
 import java.io.File
 
@@ -535,58 +535,58 @@ private fun analyzeFile(
         Log.i(TAG, "Audio streams: $audioCount")
 
         if (audioCount > 0) {
-            Log.d(TAG, "=== Testing get() with AudioParameter constants ===")
+            Log.d(TAG, "=== Testing get() with Audio constants ===")
             
             // Formato
-            result["Codec de audio"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.FORMAT).also {
+            result["Codec de audio"] = mediaInfo.get(StreamKind.Audio, 0, Audio.FORMAT).also {
                 Log.i(TAG, "Audio Format: $it")
             }
-            result["Formato (string)"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.FORMAT_STRING).also {
+            result["Formato (string)"] = mediaInfo.get(StreamKind.Audio, 0, Audio.FORMAT_STRING).also {
                 Log.i(TAG, "Audio Format/String: $it")
             }
             
             // Duración
-            result["Duración audio"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.DURATION_STRING).also {
+            result["Duración audio"] = mediaInfo.get(StreamKind.Audio, 0, Audio.DURATION_STRING).also {
                 Log.i(TAG, "Audio Duration/String: $it")
             }
             
             // Bitrate
-            result["Bitrate de audio"] = formatBitrate(mediaInfo.get(StreamKind.Audio, 0, AudioParameter.BITRATE)).also {
+            result["Bitrate de audio"] = formatBitrate(mediaInfo.get(StreamKind.Audio, 0, Audio.BITRATE)).also {
                 Log.i(TAG, "Audio BitRate: $it")
             }
-            result["Bitrate (string)"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.BITRATE_STRING).also {
+            result["Bitrate (string)"] = mediaInfo.get(StreamKind.Audio, 0, Audio.BITRATE_STRING).also {
                 Log.i(TAG, "Audio BitRate/String: $it")
             }
             
             // Canales
-            result["Canales"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.CHANNELS).also {
+            result["Canales"] = mediaInfo.get(StreamKind.Audio, 0, Audio.CHANNELS).also {
                 Log.i(TAG, "Audio Channels: $it")
             }
-            result["Canales (string)"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.CHANNELS_STRING).also {
+            result["Canales (string)"] = mediaInfo.get(StreamKind.Audio, 0, Audio.CHANNELS_STRING).also {
                 Log.i(TAG, "Audio Channels/String: $it")
             }
-            result["Layout de canales"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.CHANNEL_LAYOUT).also {
+            result["Layout de canales"] = mediaInfo.get(StreamKind.Audio, 0, Audio.CHANNEL_LAYOUT).also {
                 Log.i(TAG, "Audio ChannelLayout: $it")
             }
             
             // Sampling
-            result["Sample rate"] = formatSampleRate(mediaInfo.get(StreamKind.Audio, 0, AudioParameter.SAMPLING_RATE)).also {
+            result["Sample rate"] = formatSampleRate(mediaInfo.get(StreamKind.Audio, 0, Audio.SAMPLING_RATE)).also {
                 Log.i(TAG, "Audio SamplingRate: $it")
             }
             
             // Profundidad
-            result["Bit depth"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.BIT_DEPTH).also {
+            result["Bit depth"] = mediaInfo.get(StreamKind.Audio, 0, Audio.BIT_DEPTH).also {
                 Log.i(TAG, "Audio BitDepth: $it")
             }
             
             // Metadata
-            result["Título"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.TITLE).also {
+            result["Título"] = mediaInfo.get(StreamKind.Audio, 0, Audio.TITLE).also {
                 Log.i(TAG, "Audio Title: $it")
             }
-            result["Idioma"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.LANGUAGE).also {
+            result["Idioma"] = mediaInfo.get(StreamKind.Audio, 0, Audio.LANGUAGE).also {
                 Log.i(TAG, "Audio Language: $it")
             }
-            result["Encoder"] = mediaInfo.get(StreamKind.Audio, 0, AudioParameter.ENCODED_LIBRARY).also {
+            result["Encoder"] = mediaInfo.get(StreamKind.Audio, 0, Audio.ENCODED_LIBRARY).also {
                 Log.i(TAG, "Audio Encoded_Library: $it")
             }
             
