@@ -8,8 +8,10 @@ import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -44,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.twedmediainfo.android.StreamKind
 import com.twedmediainfo.android.TwedMediaInfo
 import com.twedmediainfo.android.parameters.Audio
@@ -112,7 +115,7 @@ private fun checkStoragePermission(context: android.content.Context): Boolean {
         Environment.isExternalStorageManager()
     } else {
         // Android 10 y anteriores: READ_EXTERNAL_STORAGE
-        android.content.ContextCompat.checkSelfPermission(
+        ContextCompat.checkSelfPermission(
             context,
             android.Manifest.permission.READ_EXTERNAL_STORAGE
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -179,6 +182,15 @@ fun VersionBanner(modifier: Modifier = Modifier) {
 fun PermissionRequest(onPermissionGranted: () -> Unit) {
     val context = LocalContext.current
     
+    // Mover el launcher FUERA del onClick (debe estar en el cuerpo del @Composable)
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            onPermissionGranted()
+        }
+    }
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -211,15 +223,7 @@ fun PermissionRequest(onPermissionGranted: () -> Unit) {
                 context.startActivity(intent)
             } else {
                 // Android 10 y anteriores: Solicitar READ_EXTERNAL_STORAGE
-                val permission = android.Manifest.permission.READ_EXTERNAL_STORAGE
-                val requestPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-                    androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-                ) { granted ->
-                    if (granted) {
-                        onPermissionGranted()
-                    }
-                }
-                requestPermissionLauncher.launch(permission)
+                requestPermissionLauncher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
             }
         }) {
             Text("Conceder permiso")
