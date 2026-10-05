@@ -47,12 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.twedmediainfo.android.StreamKind
 import com.twedmediainfo.android.TwedMediaInfo
-import com.twedmediainfo.android.parameters.Audio
-import com.twedmediainfo.android.parameters.Image
-import com.twedmediainfo.android.parameters.Text
-import com.twedmediainfo.android.parameters.Video
 import com.twedmi.test.ui.theme.ComposeEmptyActivityTheme
 import java.io.File
 
@@ -92,7 +87,6 @@ fun MediaInfoApp() {
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Versión de la biblioteca (valida que carga nativa funciona)
             VersionBanner(
                 modifier = Modifier.padding(16.dp)
             )
@@ -104,7 +98,6 @@ fun MediaInfoApp() {
                     }
                 )
             } else {
-                // Pantalla principal con tabs
                 MainScreen()
             }
         }
@@ -113,10 +106,8 @@ fun MediaInfoApp() {
 
 private fun checkStoragePermission(context: android.content.Context): Boolean {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        // Android 11+ : MANAGE_EXTERNAL_STORAGE
         Environment.isExternalStorageManager()
     } else {
-        // Android 10 y anteriores: READ_EXTERNAL_STORAGE
         ContextCompat.checkSelfPermission(
             context,
             android.Manifest.permission.READ_EXTERNAL_STORAGE
@@ -134,11 +125,11 @@ fun VersionBanner(modifier: Modifier = Modifier) {
             Log.d(TAG, "=== Testing getMediaInfoVersion() ===")
             val mi = TwedMediaInfo.getMediaInfoVersion()
             Log.i(TAG, "MediaInfoLib version: $mi")
-            
+
             Log.d(TAG, "=== Testing getZenLibVersion() ===")
             val zl = TwedMediaInfo.getZenLibVersion()
             Log.i(TAG, "ZenLib version: $zl")
-            
+
             versions = mi to zl
         } catch (e: Throwable) {
             Log.e(TAG, "Error getting versions", e)
@@ -183,7 +174,7 @@ fun VersionBanner(modifier: Modifier = Modifier) {
 @Composable
 fun PermissionRequest(onPermissionGranted: () -> Unit) {
     val context = LocalContext.current
-    
+
     val requestPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -191,7 +182,7 @@ fun PermissionRequest(onPermissionGranted: () -> Unit) {
             onPermissionGranted()
         }
     }
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -214,26 +205,23 @@ fun PermissionRequest(onPermissionGranted: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Button(onClick = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                // Android 11+: Abrir configuración de acceso a todos los archivos
                 val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
                     data = Uri.parse("package:${context.packageName}")
                 }
                 context.startActivity(intent)
             } else {
-                // Android 10 y anteriores: Solicitar READ_EXTERNAL_STORAGE
                 requestPermissionLauncher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
             }
         }) {
             Text("Conceder permiso")
         }
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         Button(onClick = {
-            // Verificar si el permiso fue concedido después de regresar de configuración
             if (checkStoragePermission(context)) {
                 onPermissionGranted()
             }
@@ -266,43 +254,6 @@ fun MainScreen() {
             3 -> TextScreen()
         }
     }
-}
-
-@Composable
-fun AudioScreen() {
-    MediaScreen(
-        title = "Archivos de Audio",
-        extensions = AUDIO_EXTENSIONS,
-        analyzeFile = ::analyzeAudioFile
-    )
-}
-
-@Composable
-fun VideoScreen() {
-    MediaScreen(
-        title = "Archivos de Video",
-        extensions = VIDEO_EXTENSIONS,
-        analyzeFile = ::analyzeVideoFile
-    )
-}
-
-@Composable
-fun ImageScreen() {
-    MediaScreen(
-        title = "Archivos de Imagen",
-        extensions = IMAGE_EXTENSIONS,
-        analyzeFile = ::analyzeImageFile
-    )
-}
-
-@Composable
-fun TextScreen() {
-    // Los subtítulos suelen estar embebidos en contenedores de audio/video
-    MediaScreen(
-        title = "Subtítulos (en contenedores A/V)",
-        extensions = TEXT_CONTAINER_EXTENSIONS,
-        analyzeFile = ::analyzeTextFile
-    )
 }
 
 @Composable
@@ -569,33 +520,27 @@ fun ErrorView(message: String, onBack: () -> Unit) {
     }
 }
 
-private val AUDIO_EXTENSIONS = setOf(
+internal val AUDIO_EXTENSIONS = setOf(
     "mp3", "ogg", "opus", "flac", "m4a", "aac", "wav", "wma", "alac",
     "mka", "mid", "midi", "amr", "awb", "ac3", "eac3", "dts",
     "ape", "wv", "aiff", "aif", "caf", "dsf", "dff"
 )
 
-private val VIDEO_EXTENSIONS = setOf(
+internal val VIDEO_EXTENSIONS = setOf(
     "mp4", "mkv", "webm", "mov", "avi", "3gp", "3g2", "ts", "m2ts", "mts",
     "flv", "wmv", "mpg", "mpeg", "m4v", "vob", "ogv", "divx", "xvid",
     "rm", "rmvb", "asf", "m2v", "m4p"
 )
 
-private val IMAGE_EXTENSIONS = setOf(
-    // Raster comunes
+internal val IMAGE_EXTENSIONS = setOf(
     "jpg", "jpeg", "png", "gif", "bmp", "webp",
-    // Modernos / HDR
     "heic", "heif", "avif", "jxl",
-    // TIFF
     "tiff", "tif",
-    // RAW de cámaras
     "dng", "cr2", "cr3", "nef", "arw", "orf", "rw2", "raf", "pef", "srw",
-    // Íconos y otros
     "ico", "cur", "pcx", "tga", "ppm", "pgm", "pbm", "pam"
 )
 
-// Los subtítulos están embebidos en contenedores de audio/video
-private val TEXT_CONTAINER_EXTENSIONS = AUDIO_EXTENSIONS + VIDEO_EXTENSIONS
+internal val TEXT_CONTAINER_EXTENSIONS = AUDIO_EXTENSIONS + VIDEO_EXTENSIONS
 
 private fun loadFilesFromDirectory(
     path: String,
@@ -631,345 +576,11 @@ private fun loadFilesFromDirectory(
     }
 }
 
-private fun analyzeAudioFile(file: File): Map<String, String>? {
-    Log.i(TAG, "=== Analyzing audio file: ${file.name} ===")
-    Log.d(TAG, "File path: ${file.absolutePath}")
-    
-    val mediaInfo = TwedMediaInfo()
-    val result = mutableMapOf<String, String>()
-
-    return try {
-        if (!mediaInfo.open(file.absolutePath)) {
-            Log.e(TAG, "Failed to open file")
-            mediaInfo.destroy()
-            return null
-        }
-        Log.i(TAG, "✅ File opened successfully")
-
-        // Información general
-        result["Formato"] = mediaInfo.getGeneral("Format")
-        result["Duración"] = formatDuration(mediaInfo.getGeneral("Duration"))
-        result["Tamaño"] = formatFileSize(mediaInfo.getGeneral("FileSize").toLongOrNull() ?: 0L)
-        result["Bitrate total"] = formatBitrate(mediaInfo.getGeneral("OverallBitRate"))
-
-        // Streams de audio
-        val audioCount = mediaInfo.countStreams(StreamKind.AUDIO)
-        result["Streams de audio"] = audioCount.toString()
-
-        if (audioCount > 0) {
-            result["Codec"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.FORMAT)
-            result["Codec (string)"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.FORMAT_STRING)
-            result["Duración"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.DURATION_STRING)
-            result["Bitrate"] = formatBitrate(mediaInfo.get(StreamKind.AUDIO, 0, Audio.BITRATE))
-            result["Bitrate (string)"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.BITRATE_STRING)
-            result["Canales"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNELS)
-            result["Canales (string)"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNELS_STRING)
-            result["Layout"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNEL_LAYOUT)
-            result["Sample rate"] = formatSampleRate(mediaInfo.get(StreamKind.AUDIO, 0, Audio.SAMPLING_RATE))
-            result["Bit depth"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.BIT_DEPTH)
-            result["Título"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.TITLE)
-            result["Artista"] = mediaInfo.get(StreamKind.AUDIO, 0, "Performer")
-            result["Álbum"] = mediaInfo.get(StreamKind.AUDIO, 0, "Album")
-            result["Idioma"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.LANGUAGE)
-            result["Encoder"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.ENCODED_LIBRARY)
-        }
-
-        mediaInfo.close()
-        mediaInfo.destroy()
-        
-        Log.i(TAG, "=== ✅ Audio analysis complete for ${file.name} ===")
-        result
-    } catch (e: Throwable) {
-        Log.e(TAG, "❌ Exception during audio analysis", e)
-        try {
-            mediaInfo.destroy()
-        } catch (_: Throwable) {}
-        null
-    }
+internal fun MutableMap<String, String>.putIfNotEmpty(key: String, value: String) {
+    if (value.isNotEmpty()) put(key, value)
 }
 
-private fun analyzeVideoFile(file: File): Map<String, String>? {
-    Log.i(TAG, "=== Analyzing video file: ${file.name} ===")
-    Log.d(TAG, "File path: ${file.absolutePath}")
-    
-    val mediaInfo = TwedMediaInfo()
-    val result = mutableMapOf<String, String>()
-
-    return try {
-        if (!mediaInfo.open(file.absolutePath)) {
-            Log.e(TAG, "Failed to open file")
-            mediaInfo.destroy()
-            return null
-        }
-        Log.i(TAG, "✅ File opened successfully")
-
-        // Información general
-        result["Formato"] = mediaInfo.getGeneral("Format")
-        result["Duración"] = formatDuration(mediaInfo.getGeneral("Duration"))
-        result["Tamaño"] = formatFileSize(mediaInfo.getGeneral("FileSize").toLongOrNull() ?: 0L)
-        result["Bitrate total"] = formatBitrate(mediaInfo.getGeneral("OverallBitRate"))
-
-        // Streams de video
-        val videoCount = mediaInfo.countStreams(StreamKind.VIDEO)
-        result["Streams de video"] = videoCount.toString()
-
-        if (videoCount > 0) {
-            result["Codec"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.FORMAT)
-            result["Codec (string)"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.FORMAT_STRING)
-            result["Perfil"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.FORMAT_PROFILE)
-            result["Nivel"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.FORMAT_LEVEL)
-            
-            val width = mediaInfo.get(StreamKind.VIDEO, 0, Video.WIDTH)
-            val height = mediaInfo.get(StreamKind.VIDEO, 0, Video.HEIGHT)
-            result["Resolución"] = if (width.isNotEmpty() && height.isNotEmpty()) "${width}x${height}" else ""
-            
-            result["Aspect ratio"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.DISPLAY_ASPECT_RATIO_STRING)
-            result["FPS"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.FRAME_RATE_STRING)
-            result["Bitrate"] = formatBitrate(mediaInfo.get(StreamKind.VIDEO, 0, Video.BITRATE))
-            result["Bitrate (string)"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.BITRATE_STRING)
-            result["Duración"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.DURATION_STRING)
-            result["Color space"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.COLOR_SPACE)
-            result["Chroma subsampling"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.CHROMA_SUBSAMPLING)
-            result["Bit depth"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.BIT_DEPTH)
-            result["Scan type"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.SCAN_TYPE)
-            result["HDR format"] = mediaInfo.get(StreamKind.VIDEO, 0, Video.HDR_FORMAT)
-        }
-
-        // Streams de audio (si existen)
-        val audioCount = mediaInfo.countStreams(StreamKind.AUDIO)
-        result["Streams de audio"] = audioCount.toString()
-
-        if (audioCount > 0) {
-            result["Audio codec"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.FORMAT)
-            result["Audio canales"] = mediaInfo.get(StreamKind.AUDIO, 0, Audio.CHANNELS_STRING)
-            result["Audio bitrate"] = formatBitrate(mediaInfo.get(StreamKind.AUDIO, 0, Audio.BITRATE))
-        }
-
-        mediaInfo.close()
-        mediaInfo.destroy()
-        
-        Log.i(TAG, "=== ✅ Video analysis complete for ${file.name} ===")
-        result
-    } catch (e: Throwable) {
-        Log.e(TAG, "❌ Exception during video analysis", e)
-        try {
-            mediaInfo.destroy()
-        } catch (_: Throwable) {}
-        null
-    }
-}
-
-private fun analyzeImageFile(file: File): Map<String, String>? {
-    Log.i(TAG, "=== Analyzing image file: ${file.name} ===")
-    Log.d(TAG, "File path: ${file.absolutePath}")
-    
-    val mediaInfo = TwedMediaInfo()
-    val result = mutableMapOf<String, String>()
-
-    return try {
-        if (!mediaInfo.open(file.absolutePath)) {
-            Log.e(TAG, "Failed to open file")
-            mediaInfo.destroy()
-            return null
-        }
-        Log.i(TAG, "✅ File opened successfully")
-
-        // Información general del contenedor
-        result["Formato"] = mediaInfo.getGeneral("Format")
-        result["Tamaño"] = formatFileSize(mediaInfo.getGeneral("FileSize").toLongOrNull() ?: 0L)
-
-        // Streams de imagen
-        val imageCount = mediaInfo.countStreams(StreamKind.IMAGE)
-        result["Streams de imagen"] = imageCount.toString()
-
-        if (imageCount > 0) {
-            // Formato
-            result["Codec"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.FORMAT)
-            result["Codec (string)"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.FORMAT_STRING)
-            result["Perfil"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.FORMAT_PROFILE)
-            result["Compresión"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.FORMAT_COMPRESSION)
-            
-            // Tipo (exclusivo de Image)
-            val type = mediaInfo.get(StreamKind.IMAGE, 0, Image.TYPE)
-            if (type.isNotEmpty()) result["Tipo"] = type
-            
-            // Dimensiones
-            val width = mediaInfo.get(StreamKind.IMAGE, 0, Image.WIDTH)
-            val height = mediaInfo.get(StreamKind.IMAGE, 0, Image.HEIGHT)
-            result["Resolución"] = if (width.isNotEmpty() && height.isNotEmpty()) "${width}x${height}" else ""
-            result["Aspect ratio"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.DISPLAY_ASPECT_RATIO_STRING)
-            result["Pixel aspect ratio"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.PIXEL_ASPECT_RATIO)
-            
-            // Color
-            result["Color space"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.COLOR_SPACE)
-            result["Chroma subsampling"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.CHROMA_SUBSAMPLING)
-            result["Bit depth"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.BIT_DEPTH)
-            result["Rango de color"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.COLOUR_RANGE)
-            result["Primarios"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.COLOUR_PRIMARIES)
-            result["Transfer"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.TRANSFER_CHARACTERISTICS)
-            result["Matrix coef."] = mediaInfo.get(StreamKind.IMAGE, 0, Image.MATRIX_COEFFICIENTS)
-            
-            // HDR
-            val hdrFormat = mediaInfo.get(StreamKind.IMAGE, 0, Image.HDR_FORMAT)
-            if (hdrFormat.isNotEmpty()) {
-                result["HDR format"] = hdrFormat
-                result["MaxCLL"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.MAX_CLL)
-                result["MaxFALL"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.MAX_FALL)
-                result["Mastering primaries"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.MASTERING_DISPLAY_COLOR_PRIMARIES)
-                result["Mastering luminance"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.MASTERING_DISPLAY_LUMINANCE)
-            }
-            
-            // Compresión
-            result["Modo compresión"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.COMPRESSION_MODE)
-            result["Ratio compresión"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.COMPRESSION_RATIO)
-            
-            // Tamaño del stream
-            result["Tamaño stream"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.STREAM_SIZE_STRING)
-            
-            // Metadata
-            result["Encoder"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.ENCODED_LIBRARY)
-            result["Fecha"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.ENCODED_DATE)
-            result["Idioma"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.LANGUAGE)
-            
-            // Summary (exclusivo de Image)
-            val summary = mediaInfo.get(StreamKind.IMAGE, 0, Image.SUMMARY)
-            if (summary.isNotEmpty()) result["Resumen"] = summary
-        }
-
-        mediaInfo.close()
-        mediaInfo.destroy()
-        
-        Log.i(TAG, "=== ✅ Image analysis complete for ${file.name} ===")
-        result
-    } catch (e: Throwable) {
-        Log.e(TAG, "❌ Exception during image analysis", e)
-        try {
-            mediaInfo.destroy()
-        } catch (_: Throwable) {}
-        null
-    }
-}
-
-private fun analyzeTextFile(file: File): Map<String, String>? {
-    Log.i(TAG, "=== Analyzing text streams in: ${file.name} ===")
-    Log.d(TAG, "File path: ${file.absolutePath}")
-    
-    val mediaInfo = TwedMediaInfo()
-    val result = mutableMapOf<String, String>()
-
-    return try {
-        if (!mediaInfo.open(file.absolutePath)) {
-            Log.e(TAG, "Failed to open file")
-            mediaInfo.destroy()
-            return null
-        }
-        Log.i(TAG, "✅ File opened successfully")
-
-        // Información general del contenedor
-        result["Formato contenedor"] = mediaInfo.getGeneral("Format")
-        result["Tamaño"] = formatFileSize(mediaInfo.getGeneral("FileSize").toLongOrNull() ?: 0L)
-        result["Duración total"] = formatDuration(mediaInfo.getGeneral("Duration"))
-
-        // Streams de texto
-        val textCount = mediaInfo.countStreams(StreamKind.TEXT)
-        result["Streams de subtítulos"] = textCount.toString()
-
-        if (textCount == 0) {
-            result["Estado"] = "⚠️ Este archivo no contiene streams de subtítulos"
-        } else {
-            // Mostrar información de cada stream de texto
-            for (i in 0 until textCount) {
-                val streamLabel = if (textCount > 1) "Subtítulo #${i + 1}" else "Subtítulo"
-                
-                // Formato
-                val format = mediaInfo.get(StreamKind.TEXT, i, Text.FORMAT)
-                val formatString = mediaInfo.get(StreamKind.TEXT, i, Text.FORMAT_STRING)
-                if (format.isNotEmpty()) {
-                    result["$streamLabel - Formato"] = if (formatString.isNotEmpty()) formatString else format
-                }
-                
-                // Codec ID
-                val codecId = mediaInfo.get(StreamKind.TEXT, i, Text.CODEC_ID)
-                if (codecId.isNotEmpty()) {
-                    result["$streamLabel - Codec ID"] = codecId
-                }
-                
-                // Muxing mode
-                val muxingMode = mediaInfo.get(StreamKind.TEXT, i, Text.MUXING_MODE)
-                if (muxingMode.isNotEmpty()) {
-                    result["$streamLabel - Muxing"] = muxingMode
-                }
-                
-                // Idioma
-                val language = mediaInfo.get(StreamKind.TEXT, i, Text.LANGUAGE_STRING)
-                if (language.isNotEmpty()) {
-                    result["$streamLabel - Idioma"] = language
-                }
-                
-                // Título
-                val title = mediaInfo.get(StreamKind.TEXT, i, Text.TITLE)
-                if (title.isNotEmpty()) {
-                    result["$streamLabel - Título"] = title
-                }
-                
-                // Flags
-                val isDefault = mediaInfo.get(StreamKind.TEXT, i, Text.DEFAULT)
-                if (isDefault.isNotEmpty() && isDefault == "Yes") {
-                    result["$streamLabel - Por defecto"] = "✓ Sí"
-                }
-                
-                val isForced = mediaInfo.get(StreamKind.TEXT, i, Text.FORCED)
-                if (isForced.isNotEmpty() && isForced == "Yes") {
-                    result["$streamLabel - Forzado"] = "✓ Sí"
-                }
-                
-                // Geometría (en caracteres)
-                val width = mediaInfo.get(StreamKind.TEXT, i, Text.WIDTH)
-                val height = mediaInfo.get(StreamKind.TEXT, i, Text.HEIGHT)
-                if (width.isNotEmpty() && height.isNotEmpty()) {
-                    result["$streamLabel - Dimensiones"] = "${width}x${height} caracteres"
-                }
-                
-                // Métricas de subtítulos
-                val linesCount = mediaInfo.get(StreamKind.TEXT, i, Text.LINES_COUNT)
-                if (linesCount.isNotEmpty()) {
-                    result["$streamLabel - Líneas totales"] = linesCount
-                }
-                
-                val eventsTotal = mediaInfo.get(StreamKind.TEXT, i, Text.EVENTS_TOTAL)
-                if (eventsTotal.isNotEmpty()) {
-                    result["$streamLabel - Eventos"] = eventsTotal
-                }
-                
-                // Duración del stream de texto
-                val duration = mediaInfo.get(StreamKind.TEXT, i, Text.DURATION_STRING)
-                if (duration.isNotEmpty()) {
-                    result["$streamLabel - Duración"] = duration
-                }
-                
-                // Tamaño del stream
-                val streamSize = mediaInfo.get(StreamKind.TEXT, i, Text.STREAM_SIZE_STRING)
-                if (streamSize.isNotEmpty()) {
-                    result["$streamLabel - Tamaño"] = streamSize
-                }
-            }
-        }
-
-        mediaInfo.close()
-        mediaInfo.destroy()
-        
-        Log.i(TAG, "=== ✅ Text analysis complete for ${file.name} ===")
-        result
-    } catch (e: Throwable) {
-        Log.e(TAG, "❌ Exception during text analysis", e)
-        try {
-            mediaInfo.destroy()
-        } catch (_: Throwable) {}
-        null
-    }
-}
-
-private fun formatDuration(durationMs: String): String {
+internal fun formatDuration(durationMs: String): String {
     val ms = durationMs.toLongOrNull() ?: return durationMs.ifEmpty { "N/A" }
     val seconds = ms / 1000
     val minutes = seconds / 60
@@ -982,7 +593,7 @@ private fun formatDuration(durationMs: String): String {
     }
 }
 
-private fun formatFileSize(bytes: Long): String {
+internal fun formatFileSize(bytes: Long): String {
     if (bytes <= 0) return "N/A"
     val units = arrayOf("B", "KB", "MB", "GB")
     var size = bytes.toDouble()
@@ -996,13 +607,13 @@ private fun formatFileSize(bytes: Long): String {
     return String.format("%.2f %s", size, units[unitIndex])
 }
 
-private fun formatBitrate(bitrate: String): String {
+internal fun formatBitrate(bitrate: String): String {
     val bps = bitrate.toLongOrNull() ?: return bitrate.ifEmpty { "N/A" }
     val kbps = bps / 1000
     return "$kbps kbps"
 }
 
-private fun formatSampleRate(sampleRate: String): String {
-    val hz = sampleRate.toIntOrNull() ?: return sampleRate.ifEmpty { "N/A" }
+internal fun formatSampleRate(sampleRate: String): String {
+    val hz = sampleRate.toLongOrNull() ?: return sampleRate.ifEmpty { "N/A" }
     return "$hz Hz"
 }
