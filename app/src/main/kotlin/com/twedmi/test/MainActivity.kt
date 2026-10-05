@@ -51,7 +51,7 @@ import com.twedmediainfo.android.TwedMediaInfo
 import com.twedmi.test.ui.theme.ComposeEmptyActivityTheme
 import java.io.File
 
-private const val TAG = "TwedMediaInfoTest"
+internal const val TAG = "TwedMediaInfoTest"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
