@@ -50,6 +50,7 @@ import androidx.core.content.ContextCompat
 import com.twedmediainfo.android.StreamKind
 import com.twedmediainfo.android.TwedMediaInfo
 import com.twedmediainfo.android.parameters.Audio
+import com.twedmediainfo.android.parameters.Image
 import com.twedmediainfo.android.parameters.Video
 import com.twedmi.test.ui.theme.ComposeEmptyActivityTheme
 import java.io.File
@@ -245,7 +246,7 @@ fun PermissionRequest(onPermissionGranted: () -> Unit) {
 @Composable
 fun MainScreen() {
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Audio", "Video")
+    val tabs = listOf("Audio", "Video", "Image")
 
     Column(modifier = Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = selectedTab) {
@@ -261,6 +262,7 @@ fun MainScreen() {
         when (selectedTab) {
             0 -> AudioScreen()
             1 -> VideoScreen()
+            2 -> ImageScreen()
         }
     }
 }
@@ -280,6 +282,15 @@ fun VideoScreen() {
         title = "Archivos de Video",
         extensions = VIDEO_EXTENSIONS,
         analyzeFile = ::analyzeVideoFile
+    )
+}
+
+@Composable
+fun ImageScreen() {
+    MediaScreen(
+        title = "Archivos de Imagen",
+        extensions = IMAGE_EXTENSIONS,
+        analyzeFile = ::analyzeImageFile
     )
 }
 
@@ -561,6 +572,19 @@ private val VIDEO_EXTENSIONS = setOf(
     "rm", "rmvb", "asf", "m2v", "m4p"
 )
 
+private val IMAGE_EXTENSIONS = setOf(
+    // Raster comunes
+    "jpg", "jpeg", "png", "gif", "bmp", "webp",
+    // Modernos / HDR
+    "heic", "heif", "avif", "jxl",
+    // TIFF
+    "tiff", "tif",
+    // RAW de cámaras
+    "dng", "cr2", "cr3", "nef", "arw", "orf", "rw2", "raf", "pef", "srw",
+    // Íconos y otros
+    "ico", "cur", "pcx", "tga", "ppm", "pgm", "pbm", "pam"
+)
+
 private fun loadFilesFromDirectory(
     path: String,
     extensions: Set<String>,
@@ -716,6 +740,97 @@ private fun analyzeVideoFile(file: File): Map<String, String>? {
         result
     } catch (e: Throwable) {
         Log.e(TAG, "❌ Exception during video analysis", e)
+        try {
+            mediaInfo.destroy()
+        } catch (_: Throwable) {}
+        null
+    }
+}
+
+private fun analyzeImageFile(file: File): Map<String, String>? {
+    Log.i(TAG, "=== Analyzing image file: ${file.name} ===")
+    Log.d(TAG, "File path: ${file.absolutePath}")
+    
+    val mediaInfo = TwedMediaInfo()
+    val result = mutableMapOf<String, String>()
+
+    return try {
+        if (!mediaInfo.open(file.absolutePath)) {
+            Log.e(TAG, "Failed to open file")
+            mediaInfo.destroy()
+            return null
+        }
+        Log.i(TAG, "✅ File opened successfully")
+
+        // Información general del contenedor
+        result["Formato"] = mediaInfo.getGeneral("Format")
+        result["Tamaño"] = formatFileSize(mediaInfo.getGeneral("FileSize").toLongOrNull() ?: 0L)
+
+        // Streams de imagen
+        val imageCount = mediaInfo.countStreams(StreamKind.IMAGE)
+        result["Streams de imagen"] = imageCount.toString()
+
+        if (imageCount > 0) {
+            // Formato
+            result["Codec"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.FORMAT)
+            result["Codec (string)"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.FORMAT_STRING)
+            result["Perfil"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.FORMAT_PROFILE)
+            result["Compresión"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.FORMAT_COMPRESSION)
+            
+            // Tipo (exclusivo de Image)
+            val type = mediaInfo.get(StreamKind.IMAGE, 0, Image.TYPE)
+            if (type.isNotEmpty()) result["Tipo"] = type
+            
+            // Dimensiones
+            val width = mediaInfo.get(StreamKind.IMAGE, 0, Image.WIDTH)
+            val height = mediaInfo.get(StreamKind.IMAGE, 0, Image.HEIGHT)
+            result["Resolución"] = if (width.isNotEmpty() && height.isNotEmpty()) "${width}x${height}" else ""
+            result["Aspect ratio"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.DISPLAY_ASPECT_RATIO_STRING)
+            result["Pixel aspect ratio"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.PIXEL_ASPECT_RATIO)
+            
+            // Color
+            result["Color space"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.COLOR_SPACE)
+            result["Chroma subsampling"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.CHROMA_SUBSAMPLING)
+            result["Bit depth"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.BIT_DEPTH)
+            result["Rango de color"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.COLOUR_RANGE)
+            result["Primarios"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.COLOUR_PRIMARIES)
+            result["Transfer"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.TRANSFER_CHARACTERISTICS)
+            result["Matrix coef."] = mediaInfo.get(StreamKind.IMAGE, 0, Image.MATRIX_COEFFICIENTS)
+            
+            // HDR
+            val hdrFormat = mediaInfo.get(StreamKind.IMAGE, 0, Image.HDR_FORMAT)
+            if (hdrFormat.isNotEmpty()) {
+                result["HDR format"] = hdrFormat
+                result["MaxCLL"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.MAX_CLL)
+                result["MaxFALL"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.MAX_FALL)
+                result["Mastering primaries"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.MASTERING_DISPLAY_COLOR_PRIMARIES)
+                result["Mastering luminance"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.MASTERING_DISPLAY_LUMINANCE)
+            }
+            
+            // Compresión
+            result["Modo compresión"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.COMPRESSION_MODE)
+            result["Ratio compresión"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.COMPRESSION_RATIO)
+            
+            // Tamaño del stream
+            result["Tamaño stream"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.STREAM_SIZE_STRING)
+            
+            // Metadata
+            result["Encoder"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.ENCODED_LIBRARY)
+            result["Fecha"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.ENCODED_DATE)
+            result["Idioma"] = mediaInfo.get(StreamKind.IMAGE, 0, Image.LANGUAGE)
+            
+            // Summary (exclusivo de Image)
+            val summary = mediaInfo.get(StreamKind.IMAGE, 0, Image.SUMMARY)
+            if (summary.isNotEmpty()) result["Resumen"] = summary
+        }
+
+        mediaInfo.close()
+        mediaInfo.destroy()
+        
+        Log.i(TAG, "=== ✅ Image analysis complete for ${file.name} ===")
+        result
+    } catch (e: Throwable) {
+        Log.e(TAG, "❌ Exception during image analysis", e)
         try {
             mediaInfo.destroy()
         } catch (_: Throwable) {}
