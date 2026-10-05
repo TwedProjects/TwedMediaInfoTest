@@ -51,6 +51,7 @@ import com.twedmediainfo.android.StreamKind
 import com.twedmediainfo.android.TwedMediaInfo
 import com.twedmediainfo.android.parameters.Audio
 import com.twedmediainfo.android.parameters.Image
+import com.twedmediainfo.android.parameters.Text
 import com.twedmediainfo.android.parameters.Video
 import com.twedmi.test.ui.theme.ComposeEmptyActivityTheme
 import java.io.File
@@ -183,7 +184,6 @@ fun VersionBanner(modifier: Modifier = Modifier) {
 fun PermissionRequest(onPermissionGranted: () -> Unit) {
     val context = LocalContext.current
     
-    // Mover el launcher FUERA del onClick (debe estar en el cuerpo del @Composable)
     val requestPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -246,7 +246,7 @@ fun PermissionRequest(onPermissionGranted: () -> Unit) {
 @Composable
 fun MainScreen() {
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Audio", "Video", "Image")
+    val tabs = listOf("Audio", "Video", "Image", "Text")
 
     Column(modifier = Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = selectedTab) {
@@ -263,6 +263,7 @@ fun MainScreen() {
             0 -> AudioScreen()
             1 -> VideoScreen()
             2 -> ImageScreen()
+            3 -> TextScreen()
         }
     }
 }
@@ -291,6 +292,16 @@ fun ImageScreen() {
         title = "Archivos de Imagen",
         extensions = IMAGE_EXTENSIONS,
         analyzeFile = ::analyzeImageFile
+    )
+}
+
+@Composable
+fun TextScreen() {
+    // Los subtítulos suelen estar embebidos en contenedores de audio/video
+    MediaScreen(
+        title = "Subtítulos (en contenedores A/V)",
+        extensions = TEXT_CONTAINER_EXTENSIONS,
+        analyzeFile = ::analyzeTextFile
     )
 }
 
@@ -507,23 +518,21 @@ fun FileInfoView(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 info.forEach { (key, value) ->
-                    if (value.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "$key:",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.width(140.dp)
-                            )
-                            Text(
-                                text = value,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "$key:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.width(160.dp)
+                        )
+                        Text(
+                            text = value,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }
@@ -584,6 +593,9 @@ private val IMAGE_EXTENSIONS = setOf(
     // Íconos y otros
     "ico", "cur", "pcx", "tga", "ppm", "pgm", "pbm", "pam"
 )
+
+// Los subtítulos están embebidos en contenedores de audio/video
+private val TEXT_CONTAINER_EXTENSIONS = AUDIO_EXTENSIONS + VIDEO_EXTENSIONS
 
 private fun loadFilesFromDirectory(
     path: String,
@@ -831,6 +843,125 @@ private fun analyzeImageFile(file: File): Map<String, String>? {
         result
     } catch (e: Throwable) {
         Log.e(TAG, "❌ Exception during image analysis", e)
+        try {
+            mediaInfo.destroy()
+        } catch (_: Throwable) {}
+        null
+    }
+}
+
+private fun analyzeTextFile(file: File): Map<String, String>? {
+    Log.i(TAG, "=== Analyzing text streams in: ${file.name} ===")
+    Log.d(TAG, "File path: ${file.absolutePath}")
+    
+    val mediaInfo = TwedMediaInfo()
+    val result = mutableMapOf<String, String>()
+
+    return try {
+        if (!mediaInfo.open(file.absolutePath)) {
+            Log.e(TAG, "Failed to open file")
+            mediaInfo.destroy()
+            return null
+        }
+        Log.i(TAG, "✅ File opened successfully")
+
+        // Información general del contenedor
+        result["Formato contenedor"] = mediaInfo.getGeneral("Format")
+        result["Tamaño"] = formatFileSize(mediaInfo.getGeneral("FileSize").toLongOrNull() ?: 0L)
+        result["Duración total"] = formatDuration(mediaInfo.getGeneral("Duration"))
+
+        // Streams de texto
+        val textCount = mediaInfo.countStreams(StreamKind.TEXT)
+        result["Streams de subtítulos"] = textCount.toString()
+
+        if (textCount == 0) {
+            result["Estado"] = "⚠️ Este archivo no contiene streams de subtítulos"
+        } else {
+            // Mostrar información de cada stream de texto
+            for (i in 0 until textCount) {
+                val streamLabel = if (textCount > 1) "Subtítulo #${i + 1}" else "Subtítulo"
+                
+                // Formato
+                val format = mediaInfo.get(StreamKind.TEXT, i, Text.FORMAT)
+                val formatString = mediaInfo.get(StreamKind.TEXT, i, Text.FORMAT_STRING)
+                if (format.isNotEmpty()) {
+                    result["$streamLabel - Formato"] = if (formatString.isNotEmpty()) formatString else format
+                }
+                
+                // Codec ID
+                val codecId = mediaInfo.get(StreamKind.TEXT, i, Text.CODEC_ID)
+                if (codecId.isNotEmpty()) {
+                    result["$streamLabel - Codec ID"] = codecId
+                }
+                
+                // Muxing mode
+                val muxingMode = mediaInfo.get(StreamKind.TEXT, i, Text.MUXING_MODE)
+                if (muxingMode.isNotEmpty()) {
+                    result["$streamLabel - Muxing"] = muxingMode
+                }
+                
+                // Idioma
+                val language = mediaInfo.get(StreamKind.TEXT, i, Text.LANGUAGE_STRING)
+                if (language.isNotEmpty()) {
+                    result["$streamLabel - Idioma"] = language
+                }
+                
+                // Título
+                val title = mediaInfo.get(StreamKind.TEXT, i, Text.TITLE)
+                if (title.isNotEmpty()) {
+                    result["$streamLabel - Título"] = title
+                }
+                
+                // Flags
+                val isDefault = mediaInfo.get(StreamKind.TEXT, i, Text.DEFAULT)
+                if (isDefault.isNotEmpty() && isDefault == "Yes") {
+                    result["$streamLabel - Por defecto"] = "✓ Sí"
+                }
+                
+                val isForced = mediaInfo.get(StreamKind.TEXT, i, Text.FORCED)
+                if (isForced.isNotEmpty() && isForced == "Yes") {
+                    result["$streamLabel - Forzado"] = "✓ Sí"
+                }
+                
+                // Geometría (en caracteres)
+                val width = mediaInfo.get(StreamKind.TEXT, i, Text.WIDTH)
+                val height = mediaInfo.get(StreamKind.TEXT, i, Text.HEIGHT)
+                if (width.isNotEmpty() && height.isNotEmpty()) {
+                    result["$streamLabel - Dimensiones"] = "${width}x${height} caracteres"
+                }
+                
+                // Métricas de subtítulos
+                val linesCount = mediaInfo.get(StreamKind.TEXT, i, Text.LINES_COUNT)
+                if (linesCount.isNotEmpty()) {
+                    result["$streamLabel - Líneas totales"] = linesCount
+                }
+                
+                val eventsTotal = mediaInfo.get(StreamKind.TEXT, i, Text.EVENTS_TOTAL)
+                if (eventsTotal.isNotEmpty()) {
+                    result["$streamLabel - Eventos"] = eventsTotal
+                }
+                
+                // Duración del stream de texto
+                val duration = mediaInfo.get(StreamKind.TEXT, i, Text.DURATION_STRING)
+                if (duration.isNotEmpty()) {
+                    result["$streamLabel - Duración"] = duration
+                }
+                
+                // Tamaño del stream
+                val streamSize = mediaInfo.get(StreamKind.TEXT, i, Text.STREAM_SIZE_STRING)
+                if (streamSize.isNotEmpty()) {
+                    result["$streamLabel - Tamaño"] = streamSize
+                }
+            }
+        }
+
+        mediaInfo.close()
+        mediaInfo.destroy()
+        
+        Log.i(TAG, "=== ✅ Text analysis complete for ${file.name} ===")
+        result
+    } catch (e: Throwable) {
+        Log.e(TAG, "❌ Exception during text analysis", e)
         try {
             mediaInfo.destroy()
         } catch (_: Throwable) {}
