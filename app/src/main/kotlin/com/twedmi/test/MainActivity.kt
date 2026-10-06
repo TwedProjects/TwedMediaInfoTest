@@ -251,14 +251,31 @@ fun PermissionRequest(onPermissionGranted: () -> Unit) {
 
 @Composable
 fun FileBrowser() {
+    val context = LocalContext.current
     var directoryPath by remember {
         mutableStateOf("/storage/emulated/0/")
     }
     var files by remember { mutableStateOf<List<File>>(emptyList()) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
+    var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var fileInfo by remember { mutableStateOf<List<InfoRow>?>(null) }
     var fileError by remember { mutableStateOf<String?>(null) }
+
+    // Launcher para seleccionar archivo mediante Uri
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedUri = uri
+            selectedFile = null
+            fileError = null
+            fileInfo = analyzeUri(context, uri) ?: run {
+                fileError = "No se pudo analizar el Uri"
+                null
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -266,22 +283,25 @@ fun FileBrowser() {
             .padding(16.dp)
     ) {
         when {
-            selectedFile != null -> {
+            selectedFile != null || selectedUri != null -> {
                 if (fileError != null) {
                     ErrorView(
                         message = fileError!!,
                         onBack = {
                             selectedFile = null
+                            selectedUri = null
                             fileInfo = null
                             fileError = null
                         }
                     )
                 } else if (fileInfo != null) {
                     FileInfoView(
-                        file = selectedFile!!,
+                        file = selectedFile,
+                        uri = selectedUri,
                         info = fileInfo!!,
                         onBack = {
                             selectedFile = null
+                            selectedUri = null
                             fileInfo = null
                             fileError = null
                         }
@@ -310,11 +330,24 @@ fun FileBrowser() {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Botón para seleccionar archivo mediante Uri
+                Button(
+                    onClick = {
+                        filePickerLauncher.launch(arrayOf("*/*"))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Seleccionar archivo (Uri)")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 if (files.isNotEmpty()) {
                     FileList(
                         files = files,
                         onFileClick = { file ->
                             selectedFile = file
+                            selectedUri = null
                             fileError = null
                             fileInfo = analyzeFile(file) ?: run {
                                 fileError = "No se pudo analizar el archivo"
@@ -415,7 +448,8 @@ fun FileList(files: List<File>, onFileClick: (File) -> Unit) {
 
 @Composable
 fun FileInfoView(
-    file: File,
+    file: File?,
+    uri: Uri?,
     info: List<InfoRow>,
     onBack: () -> Unit
 ) {
@@ -433,21 +467,55 @@ fun FileInfoView(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = file.name,
-            style = MaterialTheme.typography.headlineSmall
-        )
+        // Mostrar información de entrada
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Información de entrada",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = file.absolutePath,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+                if (file != null) {
+                    Text(
+                        text = "Tipo de entrada: File",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Nombre: ${file.name}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Ruta: ${file.absolutePath}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else if (uri != null) {
+                    Text(
+                        text = "Tipo de entrada: Uri",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Scheme: ${uri.scheme ?: "unknown"}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Uri: $uri",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Mostrar información del archivo
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 info.forEach { row ->
@@ -588,41 +656,12 @@ private fun analyzeFile(file: File): List<InfoRow>? {
         }
         Log.i(TAG, "✅ File opened successfully")
 
-        // ---------- GENERAL ----------
-        rows += InfoRow.Section("General")
-        rows += field("Nombre completo", mediaInfo.getGeneral(General.COMPLETE_NAME))
-        rows += field("Formato", mediaInfo.getGeneral(General.FORMAT_STRING))
-        rows += field("Formato (corto)", mediaInfo.getGeneral(General.FORMAT))
-        rows += field("Tamaño", sizeOrNA(mediaInfo.getGeneral(General.FILE_SIZE)))
-        rows += field("Duración", durationOrNA(mediaInfo.getGeneral(General.DURATION)))
-        rows += field("Bitrate global", bitrateOrNA(mediaInfo.getGeneral(General.OVERALL_BITRATE)))
-        rows += field("Título", mediaInfo.getGeneral(General.TITLE))
-        rows += field("Álbum", mediaInfo.getGeneral(General.ALBUM))
-        rows += field("Intérprete", mediaInfo.getGeneral(General.PERFORMER))
-        rows += field("Género", mediaInfo.getGeneral(General.GENRE))
-        rows += field("Fecha de grabación", mediaInfo.getGeneral(General.RECORDED_DATE))
-        rows += field("Aplicación escritura", mediaInfo.getGeneral(General.ENCODED_APPLICATION))
-        rows += field("Librería escritura", mediaInfo.getGeneral(General.ENCODED_LIBRARY))
-        rows += field("Portada", mediaInfo.getGeneral(General.COVER))
-        rows += field("Streams de video", mediaInfo.getGeneral(General.VIDEO_COUNT))
-        rows += field("Streams de audio", mediaInfo.getGeneral(General.AUDIO_COUNT))
-        rows += field("Streams de texto", mediaInfo.getGeneral(General.TEXT_COUNT))
-        rows += field("Streams de imagen", mediaInfo.getGeneral(General.IMAGE_COUNT))
-        rows += field("Streams Other", mediaInfo.getGeneral(General.OTHER_COUNT))
-
-        // ---------- VIDEO ----------
+        // Agregar todas las secciones
+        addGeneralRows(mediaInfo, rows)
         addVideoRows(mediaInfo, rows)
-
-        // ---------- AUDIO ----------
         addAudioRows(mediaInfo, rows)
-
-        // ---------- IMAGE ----------
         addImageRows(mediaInfo, rows)
-
-        // ---------- TEXT ----------
         addTextRows(mediaInfo, rows)
-
-        // ---------- OTHER ----------
         addOtherRows(mediaInfo, rows)
 
         mediaInfo.close()
@@ -635,6 +674,64 @@ private fun analyzeFile(file: File): List<InfoRow>? {
         try { mediaInfo.destroy() } catch (_: Throwable) {}
         null
     }
+}
+
+private fun analyzeUri(context: android.content.Context, uri: Uri): List<InfoRow>? {
+    Log.i(TAG, "=== Analyzing Uri: $uri ===")
+    Log.d(TAG, "Uri scheme: ${uri.scheme}")
+
+    val mediaInfo = TwedMediaInfo(context)
+    val rows = mutableListOf<InfoRow>()
+
+    return try {
+        if (!mediaInfo.open(uri)) {
+            Log.e(TAG, "Failed to open Uri")
+            mediaInfo.destroy()
+            return null
+        }
+        Log.i(TAG, "✅ Uri opened successfully")
+
+        // Agregar todas las secciones
+        addGeneralRows(mediaInfo, rows)
+        addVideoRows(mediaInfo, rows)
+        addAudioRows(mediaInfo, rows)
+        addImageRows(mediaInfo, rows)
+        addTextRows(mediaInfo, rows)
+        addOtherRows(mediaInfo, rows)
+
+        mediaInfo.close()
+        mediaInfo.destroy()
+
+        Log.i(TAG, "=== ✅ Uri analysis complete ===")
+        rows
+    } catch (e: Throwable) {
+        Log.e(TAG, "❌ Exception during Uri analysis", e)
+        try { mediaInfo.destroy() } catch (_: Throwable) {}
+        null
+    }
+}
+
+private fun addGeneralRows(mi: TwedMediaInfo, rows: MutableList<InfoRow>) {
+    rows += InfoRow.Section("General")
+    rows += field("Nombre completo", mi.getGeneral(General.COMPLETE_NAME))
+    rows += field("Formato", mi.getGeneral(General.FORMAT_STRING))
+    rows += field("Formato (corto)", mi.getGeneral(General.FORMAT))
+    rows += field("Tamaño", sizeOrNA(mi.getGeneral(General.FILE_SIZE)))
+    rows += field("Duración", durationOrNA(mi.getGeneral(General.DURATION)))
+    rows += field("Bitrate global", bitrateOrNA(mi.getGeneral(General.OVERALL_BITRATE)))
+    rows += field("Título", mi.getGeneral(General.TITLE))
+    rows += field("Álbum", mi.getGeneral(General.ALBUM))
+    rows += field("Intérprete", mi.getGeneral(General.PERFORMER))
+    rows += field("Género", mi.getGeneral(General.GENRE))
+    rows += field("Fecha de grabación", mi.getGeneral(General.RECORDED_DATE))
+    rows += field("Aplicación escritura", mi.getGeneral(General.ENCODED_APPLICATION))
+    rows += field("Librería escritura", mi.getGeneral(General.ENCODED_LIBRARY))
+    rows += field("Portada", mi.getGeneral(General.COVER))
+    rows += field("Streams de video", mi.getGeneral(General.VIDEO_COUNT))
+    rows += field("Streams de audio", mi.getGeneral(General.AUDIO_COUNT))
+    rows += field("Streams de texto", mi.getGeneral(General.TEXT_COUNT))
+    rows += field("Streams de imagen", mi.getGeneral(General.IMAGE_COUNT))
+    rows += field("Streams Other", mi.getGeneral(General.OTHER_COUNT))
 }
 
 private fun addVideoRows(mi: TwedMediaInfo, rows: MutableList<InfoRow>) {
