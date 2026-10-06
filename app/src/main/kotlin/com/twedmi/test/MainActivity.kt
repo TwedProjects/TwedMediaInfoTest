@@ -32,8 +32,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -47,11 +45,27 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.twedmediainfo.android.StreamKind
 import com.twedmediainfo.android.TwedMediaInfo
+import com.twedmediainfo.android.parameters.Audio
+import com.twedmediainfo.android.parameters.General
+import com.twedmediainfo.android.parameters.Image
+import com.twedmediainfo.android.parameters.Other
+import com.twedmediainfo.android.parameters.Text
+import com.twedmediainfo.android.parameters.Video
 import com.twedmi.test.ui.theme.ComposeEmptyActivityTheme
 import java.io.File
 
 internal const val TAG = "TwedMediaInfoTest"
+
+/** Marcador para campos vacíos o no presentes en el archivo. */
+private const val NO_VALUE = "— sin valor / no presente —"
+
+/** Fila de la vista de detalle: título de sección o campo clave/valor. */
+internal sealed interface InfoRow {
+    data class Section(val title: String) : InfoRow
+    data class Field(val label: String, val value: String) : InfoRow
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -98,7 +112,7 @@ fun MediaInfoApp() {
                     }
                 )
             } else {
-                MainScreen()
+                FileBrowser()
             }
         }
     }
@@ -231,44 +245,19 @@ fun PermissionRequest(onPermissionGranted: () -> Unit) {
     }
 }
 
-@Composable
-fun MainScreen() {
-    var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Audio", "Video", "Image", "Text")
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = selectedTab) {
-            tabs.forEachIndexed { index, title ->
-                Tab(
-                    text = { Text(title) },
-                    selected = selectedTab == index,
-                    onClick = { selectedTab = index }
-                )
-            }
-        }
-
-        when (selectedTab) {
-            0 -> AudioScreen()
-            1 -> VideoScreen()
-            2 -> ImageScreen()
-            3 -> TextScreen()
-        }
-    }
-}
+// ==============================================================================
+// Navegador de archivos (sin filtro de extensiones)
+// ==============================================================================
 
 @Composable
-fun MediaScreen(
-    title: String,
-    extensions: Set<String>,
-    analyzeFile: (File) -> Map<String, String>?
-) {
+fun FileBrowser() {
     var directoryPath by remember {
         mutableStateOf("/storage/emulated/0/")
     }
     var files by remember { mutableStateOf<List<File>>(emptyList()) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
-    var fileInfo by remember { mutableStateOf<Map<String, String>?>(null) }
+    var fileInfo by remember { mutableStateOf<List<InfoRow>?>(null) }
     var fileError by remember { mutableStateOf<String?>(null) }
 
     Column(
@@ -302,7 +291,7 @@ fun MediaScreen(
 
             else -> {
                 Text(
-                    text = title,
+                    text = "Explorador de archivos",
                     style = MaterialTheme.typography.headlineSmall
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -312,7 +301,7 @@ fun MediaScreen(
                     onDirectoryPathChange = { directoryPath = it },
                     onLoadFiles = {
                         errorMessage = null
-                        files = loadFilesFromDirectory(directoryPath, extensions) { error ->
+                        files = loadFilesFromDirectory(directoryPath) { error ->
                             errorMessage = error
                         }
                     },
@@ -427,7 +416,7 @@ fun FileList(files: List<File>, onFileClick: (File) -> Unit) {
 @Composable
 fun FileInfoView(
     file: File,
-    info: Map<String, String>,
+    info: List<InfoRow>,
     onBack: () -> Unit
 ) {
     Column(
@@ -461,29 +450,41 @@ fun FileInfoView(
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Información del archivo",
-                    style = MaterialTheme.typography.titleMedium
-                )
+                info.forEach { row ->
+                    when (row) {
+                        is InfoRow.Section -> {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = row.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                info.forEach { (key, value) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "$key:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.width(160.dp)
-                        )
-                        Text(
-                            text = value,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f)
-                        )
+                        is InfoRow.Field -> {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "${row.label}:",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.width(170.dp)
+                                )
+                                Text(
+                                    text = row.value,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (row.value == NO_VALUE) {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -520,31 +521,12 @@ fun ErrorView(message: String, onBack: () -> Unit) {
     }
 }
 
-internal val AUDIO_EXTENSIONS = setOf(
-    "mp3", "ogg", "opus", "flac", "m4a", "aac", "wav", "wma", "alac",
-    "mka", "mid", "midi", "amr", "awb", "ac3", "eac3", "dts",
-    "ape", "wv", "aiff", "aif", "caf", "dsf", "dff"
-)
-
-internal val VIDEO_EXTENSIONS = setOf(
-    "mp4", "mkv", "webm", "mov", "avi", "3gp", "3g2", "ts", "m2ts", "mts",
-    "flv", "wmv", "mpg", "mpeg", "m4v", "vob", "ogv", "divx", "xvid",
-    "rm", "rmvb", "asf", "m2v", "m4p"
-)
-
-internal val IMAGE_EXTENSIONS = setOf(
-    "jpg", "jpeg", "png", "gif", "bmp", "webp",
-    "heic", "heif", "avif", "jxl",
-    "tiff", "tif",
-    "dng", "cr2", "cr3", "nef", "arw", "orf", "rw2", "raf", "pef", "srw",
-    "ico", "cur", "pcx", "tga", "ppm", "pgm", "pbm", "pam"
-)
-
-internal val TEXT_CONTAINER_EXTENSIONS = AUDIO_EXTENSIONS + VIDEO_EXTENSIONS
+// ==============================================================================
+// Carga de archivos (SIN filtro de extensiones)
+// ==============================================================================
 
 private fun loadFilesFromDirectory(
     path: String,
-    extensions: Set<String>,
     onError: (String) -> Unit
 ): List<File> {
     return try {
@@ -558,12 +540,11 @@ private fun loadFilesFromDirectory(
             return emptyList()
         }
 
-        val files = dir.listFiles { file ->
-            file.isFile && file.extension.lowercase() in extensions
-        }?.sortedBy { it.name.lowercase() } ?: emptyList()
+        val files = dir.listFiles { file -> file.isFile }
+            ?.sortedBy { it.name.lowercase() } ?: emptyList()
 
         if (files.isEmpty()) {
-            onError("No se encontraron archivos multimedia en este directorio")
+            onError("No se encontraron archivos en este directorio")
         }
 
         files
@@ -576,9 +557,225 @@ private fun loadFilesFromDirectory(
     }
 }
 
-internal fun MutableMap<String, String>.putIfNotEmpty(key: String, value: String) {
-    if (value.isNotEmpty()) put(key, value)
+// ==============================================================================
+// Análisis unificado: General + Video + Audio + Image + Text + Other
+// ==============================================================================
+
+private fun field(label: String, value: String): InfoRow.Field =
+    InfoRow.Field(label, value.ifEmpty { NO_VALUE })
+
+private fun durationOrNA(raw: String): String =
+    if (raw.isEmpty()) NO_VALUE else formatDuration(raw)
+
+private fun sizeOrNA(raw: String): String =
+    if (raw.isEmpty()) NO_VALUE else formatFileSize(raw.toLongOrNull() ?: 0L)
+
+private fun bitrateOrNA(raw: String): String =
+    if (raw.isEmpty()) NO_VALUE else formatBitrate(raw)
+
+private fun analyzeFile(file: File): List<InfoRow>? {
+    Log.i(TAG, "=== Analyzing file: ${file.name} ===")
+    Log.d(TAG, "File path: ${file.absolutePath}")
+
+    val mediaInfo = TwedMediaInfo()
+    val rows = mutableListOf<InfoRow>()
+
+    return try {
+        if (!mediaInfo.open(file.absolutePath)) {
+            Log.e(TAG, "Failed to open file")
+            mediaInfo.destroy()
+            return null
+        }
+        Log.i(TAG, "✅ File opened successfully")
+
+        // ---------- GENERAL ----------
+        rows += InfoRow.Section("General")
+        rows += field("Nombre completo", mediaInfo.getGeneral(General.COMPLETE_NAME))
+        rows += field("Formato", mediaInfo.getGeneral(General.FORMAT_STRING))
+        rows += field("Formato (corto)", mediaInfo.getGeneral(General.FORMAT))
+        rows += field("Tamaño", sizeOrNA(mediaInfo.getGeneral(General.FILE_SIZE)))
+        rows += field("Duración", durationOrNA(mediaInfo.getGeneral(General.DURATION)))
+        rows += field("Bitrate global", bitrateOrNA(mediaInfo.getGeneral(General.OVERALL_BITRATE)))
+        rows += field("Título", mediaInfo.getGeneral(General.TITLE))
+        rows += field("Álbum", mediaInfo.getGeneral(General.ALBUM))
+        rows += field("Intérprete", mediaInfo.getGeneral(General.PERFORMER))
+        rows += field("Género", mediaInfo.getGeneral(General.GENRE))
+        rows += field("Fecha de grabación", mediaInfo.getGeneral(General.RECORDED_DATE))
+        rows += field("Aplicación escritura", mediaInfo.getGeneral(General.ENCODED_APPLICATION))
+        rows += field("Librería escritura", mediaInfo.getGeneral(General.ENCODED_LIBRARY))
+        rows += field("Portada", mediaInfo.getGeneral(General.COVER))
+        rows += field("Streams de video", mediaInfo.getGeneral(General.VIDEO_COUNT))
+        rows += field("Streams de audio", mediaInfo.getGeneral(General.AUDIO_COUNT))
+        rows += field("Streams de texto", mediaInfo.getGeneral(General.TEXT_COUNT))
+        rows += field("Streams de imagen", mediaInfo.getGeneral(General.IMAGE_COUNT))
+        rows += field("Streams Other", mediaInfo.getGeneral(General.OTHER_COUNT))
+
+        // ---------- VIDEO ----------
+        addVideoRows(mediaInfo, rows)
+
+        // ---------- AUDIO ----------
+        addAudioRows(mediaInfo, rows)
+
+        // ---------- IMAGE ----------
+        addImageRows(mediaInfo, rows)
+
+        // ---------- TEXT ----------
+        addTextRows(mediaInfo, rows)
+
+        // ---------- OTHER ----------
+        addOtherRows(mediaInfo, rows)
+
+        mediaInfo.close()
+        mediaInfo.destroy()
+
+        Log.i(TAG, "=== ✅ Analysis complete for ${file.name} ===")
+        rows
+    } catch (e: Throwable) {
+        Log.e(TAG, "❌ Exception during analysis", e)
+        try { mediaInfo.destroy() } catch (_: Throwable) {}
+        null
+    }
 }
+
+private fun addVideoRows(mi: TwedMediaInfo, rows: MutableList<InfoRow>) {
+    val count = mi.countStreams(StreamKind.VIDEO)
+    if (count == 0) {
+        rows += InfoRow.Section("Video")
+        rows += InfoRow.Field("Streams", "0 — sin streams de video en este archivo")
+        return
+    }
+    for (i in 0 until count) {
+        rows += InfoRow.Section(if (count > 1) "Video #${i + 1}" else "Video")
+        rows += field("ID", mi.get(StreamKind.VIDEO, i, Video.ID))
+        rows += field("Formato", mi.get(StreamKind.VIDEO, i, Video.FORMAT_STRING))
+        rows += field("Codec", mi.get(StreamKind.VIDEO, i, Video.FORMAT))
+        rows += field("Codec ID", mi.get(StreamKind.VIDEO, i, Video.CODEC_ID))
+        rows += field("Perfil", mi.get(StreamKind.VIDEO, i, Video.FORMAT_PROFILE))
+        rows += field("Nivel", mi.get(StreamKind.VIDEO, i, Video.FORMAT_LEVEL))
+        val w = mi.get(StreamKind.VIDEO, i, Video.WIDTH)
+        val h = mi.get(StreamKind.VIDEO, i, Video.HEIGHT)
+        rows += field("Resolución", if (w.isEmpty() || h.isEmpty()) NO_VALUE else "${w}x${h}")
+        rows += field("Aspect ratio", mi.get(StreamKind.VIDEO, i, Video.DISPLAY_ASPECT_RATIO_STRING))
+        rows += field("FPS", mi.get(StreamKind.VIDEO, i, Video.FRAME_RATE_STRING))
+        rows += field("Bitrate", bitrateOrNA(mi.get(StreamKind.VIDEO, i, Video.BITRATE)))
+        rows += field("Duración", durationOrNA(mi.get(StreamKind.VIDEO, i, Video.DURATION)))
+        rows += field("Color space", mi.get(StreamKind.VIDEO, i, Video.COLOR_SPACE))
+        rows += field("Chroma subsampling", mi.get(StreamKind.VIDEO, i, Video.CHROMA_SUBSAMPLING))
+        rows += field("Bit depth", mi.get(StreamKind.VIDEO, i, Video.BIT_DEPTH))
+        rows += field("Scan type", mi.get(StreamKind.VIDEO, i, Video.SCAN_TYPE))
+        rows += field("HDR", mi.get(StreamKind.VIDEO, i, Video.HDR_FORMAT))
+        rows += field("Tamaño stream", mi.get(StreamKind.VIDEO, i, Video.STREAM_SIZE_STRING))
+        rows += field("Idioma", mi.get(StreamKind.VIDEO, i, Video.LANGUAGE_STRING))
+        rows += field("Título", mi.get(StreamKind.VIDEO, i, Video.TITLE))
+        rows += field("Default", mi.get(StreamKind.VIDEO, i, Video.DEFAULT))
+        rows += field("Forced", mi.get(StreamKind.VIDEO, i, Video.FORCED))
+    }
+}
+
+private fun addAudioRows(mi: TwedMediaInfo, rows: MutableList<InfoRow>) {
+    val count = mi.countStreams(StreamKind.AUDIO)
+    if (count == 0) {
+        rows += InfoRow.Section("Audio")
+        rows += InfoRow.Field("Streams", "0 — sin streams de audio en este archivo")
+        return
+    }
+    for (i in 0 until count) {
+        rows += InfoRow.Section(if (count > 1) "Audio #${i + 1}" else "Audio")
+        rows += field("ID", mi.get(StreamKind.AUDIO, i, Audio.ID))
+        rows += field("Formato", mi.get(StreamKind.AUDIO, i, Audio.FORMAT_STRING))
+        rows += field("Codec", mi.get(StreamKind.AUDIO, i, Audio.FORMAT))
+        rows += field("Codec ID", mi.get(StreamKind.AUDIO, i, Audio.CODEC_ID))
+        rows += field("Duración", durationOrNA(mi.get(StreamKind.AUDIO, i, Audio.DURATION)))
+        rows += field("Bitrate", bitrateOrNA(mi.get(StreamKind.AUDIO, i, Audio.BITRATE)))
+        rows += field("Canales", mi.get(StreamKind.AUDIO, i, Audio.CHANNELS_STRING))
+        rows += field("Layout", mi.get(StreamKind.AUDIO, i, Audio.CHANNEL_LAYOUT))
+        rows += field("Sample rate", mi.get(StreamKind.AUDIO, i, Audio.SAMPLING_RATE_STRING))
+        rows += field("Bit depth", mi.get(StreamKind.AUDIO, i, Audio.BIT_DEPTH))
+        rows += field("Compresión", mi.get(StreamKind.AUDIO, i, Audio.COMPRESSION_MODE_STRING))
+        rows += field("Tamaño stream", mi.get(StreamKind.AUDIO, i, Audio.STREAM_SIZE_STRING))
+        rows += field("Idioma", mi.get(StreamKind.AUDIO, i, Audio.LANGUAGE_STRING))
+        rows += field("Título", mi.get(StreamKind.AUDIO, i, Audio.TITLE))
+        rows += field("Encoder", mi.get(StreamKind.AUDIO, i, Audio.ENCODED_LIBRARY))
+        rows += field("Default", mi.get(StreamKind.AUDIO, i, Audio.DEFAULT))
+        rows += field("Forced", mi.get(StreamKind.AUDIO, i, Audio.FORCED))
+    }
+}
+
+private fun addImageRows(mi: TwedMediaInfo, rows: MutableList<InfoRow>) {
+    val count = mi.countStreams(StreamKind.IMAGE)
+    if (count == 0) {
+        rows += InfoRow.Section("Image")
+        rows += InfoRow.Field("Streams", "0 — sin streams de imagen en este archivo")
+        return
+    }
+    for (i in 0 until count) {
+        rows += InfoRow.Section(if (count > 1) "Image #${i + 1}" else "Image")
+        rows += field("ID", mi.get(StreamKind.IMAGE, i, Image.ID))
+        rows += field("Tipo", mi.get(StreamKind.IMAGE, i, Image.TYPE))
+        rows += field("Formato", mi.get(StreamKind.IMAGE, i, Image.FORMAT_STRING))
+        rows += field("Codec", mi.get(StreamKind.IMAGE, i, Image.FORMAT))
+        val w = mi.get(StreamKind.IMAGE, i, Image.WIDTH)
+        val h = mi.get(StreamKind.IMAGE, i, Image.HEIGHT)
+        rows += field("Resolución", if (w.isEmpty() || h.isEmpty()) NO_VALUE else "${w}x${h}")
+        rows += field("Aspect ratio", mi.get(StreamKind.IMAGE, i, Image.DISPLAY_ASPECT_RATIO_STRING))
+        rows += field("Color space", mi.get(StreamKind.IMAGE, i, Image.COLOR_SPACE))
+        rows += field("Chroma subsampling", mi.get(StreamKind.IMAGE, i, Image.CHROMA_SUBSAMPLING))
+        rows += field("Bit depth", mi.get(StreamKind.IMAGE, i, Image.BIT_DEPTH))
+        rows += field("Compresión", mi.get(StreamKind.IMAGE, i, Image.COMPRESSION_MODE_STRING))
+        rows += field("HDR", mi.get(StreamKind.IMAGE, i, Image.HDR_FORMAT))
+        rows += field("Tamaño stream", mi.get(StreamKind.IMAGE, i, Image.STREAM_SIZE_STRING))
+        rows += field("Idioma", mi.get(StreamKind.IMAGE, i, Image.LANGUAGE_STRING))
+    }
+}
+
+private fun addTextRows(mi: TwedMediaInfo, rows: MutableList<InfoRow>) {
+    val count = mi.countStreams(StreamKind.TEXT)
+    if (count == 0) {
+        rows += InfoRow.Section("Text")
+        rows += InfoRow.Field("Streams", "0 — sin streams de texto en este archivo")
+        return
+    }
+    for (i in 0 until count) {
+        rows += InfoRow.Section(if (count > 1) "Text #${i + 1}" else "Text")
+        rows += field("ID", mi.get(StreamKind.TEXT, i, Text.ID))
+        rows += field("Formato", mi.get(StreamKind.TEXT, i, Text.FORMAT_STRING))
+        rows += field("Codec", mi.get(StreamKind.TEXT, i, Text.FORMAT))
+        rows += field("Codec ID", mi.get(StreamKind.TEXT, i, Text.CODEC_ID))
+        rows += field("Duración", durationOrNA(mi.get(StreamKind.TEXT, i, Text.DURATION)))
+        rows += field("Idioma", mi.get(StreamKind.TEXT, i, Text.LANGUAGE_STRING))
+        rows += field("Título", mi.get(StreamKind.TEXT, i, Text.TITLE))
+        rows += field("Líneas", mi.get(StreamKind.TEXT, i, Text.LINES_COUNT))
+        rows += field("Eventos", mi.get(StreamKind.TEXT, i, Text.EVENTS_TOTAL))
+        rows += field("Tamaño stream", mi.get(StreamKind.TEXT, i, Text.STREAM_SIZE_STRING))
+        rows += field("Default", mi.get(StreamKind.TEXT, i, Text.DEFAULT))
+        rows += field("Forced", mi.get(StreamKind.TEXT, i, Text.FORCED))
+    }
+}
+
+private fun addOtherRows(mi: TwedMediaInfo, rows: MutableList<InfoRow>) {
+    val count = mi.countStreams(StreamKind.OTHER)
+    if (count == 0) {
+        rows += InfoRow.Section("Other")
+        rows += InfoRow.Field("Streams", "0 — sin streams Other en este archivo")
+        return
+    }
+    for (i in 0 until count) {
+        rows += InfoRow.Section(if (count > 1) "Other #${i + 1}" else "Other")
+        rows += field("ID", mi.get(StreamKind.OTHER, i, Other.ID))
+        rows += field("Tipo", mi.get(StreamKind.OTHER, i, Other.TYPE))
+        rows += field("Formato", mi.get(StreamKind.OTHER, i, Other.FORMAT_STRING))
+        rows += field("Codec", mi.get(StreamKind.OTHER, i, Other.FORMAT))
+        rows += field("Duración", durationOrNA(mi.get(StreamKind.OTHER, i, Other.DURATION)))
+        rows += field("TimeCode 1er frame", mi.get(StreamKind.OTHER, i, Other.TIMECODE_FIRST_FRAME))
+        rows += field("TimeCode fuente", mi.get(StreamKind.OTHER, i, Other.TIMECODE_SOURCE))
+        rows += field("Idioma", mi.get(StreamKind.OTHER, i, Other.LANGUAGE_STRING))
+        rows += field("Título", mi.get(StreamKind.OTHER, i, Other.TITLE))
+    }
+}
+
+// ==============================================================================
+// Utilidades de formato
+// ==============================================================================
 
 internal fun formatDuration(durationMs: String): String {
     val ms = durationMs.toLongOrNull() ?: return durationMs.ifEmpty { "N/A" }
@@ -611,9 +808,4 @@ internal fun formatBitrate(bitrate: String): String {
     val bps = bitrate.toLongOrNull() ?: return bitrate.ifEmpty { "N/A" }
     val kbps = bps / 1000
     return "$kbps kbps"
-}
-
-internal fun formatSampleRate(sampleRate: String): String {
-    val hz = sampleRate.toLongOrNull() ?: return sampleRate.ifEmpty { "N/A" }
-    return "$hz Hz"
 }
