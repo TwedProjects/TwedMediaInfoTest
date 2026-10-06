@@ -62,7 +62,7 @@ internal const val TAG = "TwedMediaInfoTest"
 private const val NO_VALUE = "— sin valor / no presente —"
 
 /** Fila de la vista de detalle: título de sección o campo clave/valor. */
-sealed interface {
+sealed interface InfoRow {
     data class Section(val title: String) : InfoRow
     data class Field(val label: String, val value: String) : InfoRow
 }
